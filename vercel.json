@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/analyze-pigeon.ts": {
+      "maxDuration": 60
+    }
+  }
+}

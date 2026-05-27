@@ -2,11 +2,12 @@
   "expo": {
     "name": "poppo",
     "slug": "poppo",
+    "scheme": "poppo",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -25,6 +26,18 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "ぽっぽ（poppo）が写真を撮るためにカメラにアクセスします。",
+          "microphonePermission": "ぽっぽ（poppo）が動画に音声を含めて録画する場合にマイクへアクセスします。",
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": false
+        }
+      ]
+    ]
   }
 }
