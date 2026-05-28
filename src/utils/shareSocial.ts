@@ -53,30 +53,48 @@ async function openShareSheet(fileUri: string, dialogTitle: string): Promise<boo
   }
 }
 
+async function isInstagramInstalled(): Promise<boolean> {
+  try {
+    return await Linking.canOpenURL('instagram://app');
+  } catch {
+    return false;
+  }
+}
+
 /** 開発ビルド / 本番のみ: react-native-share で Instagram ストーリー直起動 */
 async function shareInstagramStoryNative(image: string): Promise<boolean> {
   if (isExpoGo()) return false;
+
+  const appId = getFacebookAppId();
+  if (Platform.OS === 'ios' && !appId) {
+    return false;
+  }
+
   try {
     const { default: RNShare, Social } = await import('react-native-share');
-    const appId = getFacebookAppId();
-    if (Platform.OS === 'ios') {
-      if (!appId) return false;
-      await RNShare.shareSingle({
-        social: Social.InstagramStories,
-        appId,
-        backgroundImage: image,
-        backgroundBottomColor: '#0a0a0f',
-        backgroundTopColor: '#0a0a0f',
-      });
-    } else {
-      await RNShare.shareSingle({
-        social: Social.InstagramStories,
-        backgroundImage: image,
-        backgroundBottomColor: '#0a0a0f',
-        backgroundTopColor: '#0a0a0f',
-        ...(appId ? { appId } : {}),
-      } as Parameters<typeof RNShare.shareSingle>[0]);
-    }
+    await RNShare.shareSingle({
+      social: Social.InstagramStories,
+      backgroundImage: image,
+      backgroundBottomColor: '#0a0a0f',
+      backgroundTopColor: '#0a0a0f',
+      ...(appId ? { appId } : {}),
+    } as Parameters<typeof RNShare.shareSingle>[0]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** 共有シート（Instagram を選べる） */
+async function shareViaNativeOpenSheet(image: string): Promise<boolean> {
+  if (isExpoGo()) return false;
+  try {
+    const { default: RNShare } = await import('react-native-share');
+    await RNShare.open({
+      url: image,
+      type: 'image/jpeg',
+      failOnCancel: false,
+    });
     return true;
   } catch {
     return false;
@@ -112,8 +130,32 @@ export async function shareToInstagramStory(
   const image = normalizeFileUri(fileUri);
   await copyCaption(breed, nickname);
 
-  // 本番ビルド: ストーリー直起動
-  if (await shareInstagramStoryNative(image)) {
+  const hasInstagram = await isInstagramInstalled();
+  if (!hasInstagram) {
+    throw new Error(
+      'Instagram アプリが見つかりません。App Store からインストールしてください。',
+    );
+  }
+
+  const appId = getFacebookAppId();
+
+  // Meta App ID あり → ストーリー編集画面を直接開く（要: .env + 再ビルド）
+  if (appId && (await shareInstagramStoryNative(image))) {
+    return;
+  }
+
+  // iOS で App ID が無い場合は、画像保存→Instagram 起動に寄せる（確実に開く）
+  if (Platform.OS === 'ios' && !appId) {
+    const { status } = await MediaLibrary.requestPermissionsAsync();
+    if (status !== 'granted') {
+      throw new Error('写真ライブラリへのアクセスが必要です。');
+    }
+    await MediaLibrary.saveToLibraryAsync(fileUri);
+    await Linking.openURL('instagram://app');
+    Alert.alert(
+      'Instagram を開きました',
+      'ストーリー作成で保存した画像を選んで投稿してください。',
+    );
     return;
   }
 
@@ -132,7 +174,11 @@ export async function shareToInstagramStory(
     }
   }
 
-  // Expo Go / フォールバック: 共有シート
+  // 共有シートで Instagram を選択
+  if (await shareViaNativeOpenSheet(image)) {
+    return;
+  }
+
   if (await openShareSheet(fileUri, 'Instagram ストーリーへ')) {
     return;
   }
@@ -142,12 +188,10 @@ export async function shareToInstagramStory(
     throw new Error('写真ライブラリへのアクセスが必要です。');
   }
   await MediaLibrary.saveToLibraryAsync(fileUri);
-  if (await Linking.canOpenURL('instagram://app')) {
-    await Linking.openURL('instagram://app');
-  }
+  await Linking.openURL('instagram://app');
   Alert.alert(
-    '画像を保存しました',
-    'キャプションはコピー済みです。Instagram のストーリー作成画面で、保存した画像を選んで投稿してください。',
+    'Instagram を開きました',
+    'ストーリー作成で保存した画像を選んで投稿してください。',
   );
 }
 
@@ -183,12 +227,12 @@ export async function shareToX(
       await Linking.openURL(url);
       Alert.alert(
         'X を開きました',
-        'キャプションはコピー済みです。画像は写真アプリから X に追加してください。',
+        '画像は写真アプリから X に追加してください。',
       );
       return;
     }
   }
 
   await Linking.openURL(`https://x.com/intent/tweet?text=${encoded}`);
-  Alert.alert('X を開きました', 'キャプションはコピー済みです。');
+  Alert.alert('X を開きました');
 }

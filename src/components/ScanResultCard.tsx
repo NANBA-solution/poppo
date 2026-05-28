@@ -20,7 +20,7 @@ export function ScanResultCard({
     return (
       <View style={[styles.card, styles.cardRow]}>
         <ActivityIndicator color="#c9d6ee" />
-        <Text style={styles.cardHint}>Claude がハトを判定中…</Text>
+        <Text style={styles.cardHint}>AI がハトを判定中…</Text>
       </View>
     );
   }

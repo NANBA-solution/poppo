@@ -30,7 +30,8 @@ export default function Index() {
   const [permission, requestPermission] = useCameraPermissions();
 
   const cameraRef = React.useRef<InstanceType<typeof CameraView>>(null);
-  const [ready, setReady] = React.useState(false);
+  // 一部環境で onCameraReady が発火せず、オーバーレイが残り続けるため初期値を true にする
+  const [ready, setReady] = React.useState(true);
   const [capturing, setCapturing] = React.useState(false);
   const [zoom, setZoom] = React.useState(0);
   const zoomRef = React.useRef(0);

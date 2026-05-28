@@ -22,6 +22,7 @@ module.exports = {
       ...require('./app.json').expo.ios,
       bundleIdentifier: 'app.poppo.mobile',
       infoPlist: {
+        ITSAppUsesNonExemptEncryption: false,
         LSApplicationQueriesSchemes: [
           'instagram',
           'instagram-stories',
@@ -58,7 +59,8 @@ module.exports = {
       EXPO_PUBLIC_POPPO_API_SECRET: apiSecret,
       EXPO_PUBLIC_FACEBOOK_APP_ID: facebookAppId,
       eas: {
-        projectId: process.env.EAS_PROJECT_ID?.trim() || undefined,
+        projectId:
+          process.env.EAS_PROJECT_ID?.trim() || '1b5fe20e-c747-49e1-9b2f-ffa8f3cdbb7e',
       },
     },
   },

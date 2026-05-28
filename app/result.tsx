@@ -215,11 +215,6 @@ export default function ResultScreen() {
             </Pressable>
           )}
         </View>
-        {Platform.OS !== 'web' && aiPhase === 'success' && aiResult && (
-          <Text style={styles.shareHint}>
-            キャプションは自動コピー。Instagram ストーリー直投稿は共有シートから選べます
-          </Text>
-        )}
       </View>
     </View>
   );
@@ -287,11 +282,6 @@ const styles = StyleSheet.create({
   footerRow: {
     flexDirection: 'row',
     gap: 12,
-  },
-  shareHint: {
-    color: 'rgba(201,214,238,0.45)',
-    fontSize: 11,
-    textAlign: 'center',
   },
   shareBtn: {
     flex: 1,

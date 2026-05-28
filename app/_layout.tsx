@@ -10,22 +10,24 @@ function RootNavigator() {
   const router = useRouter();
   const segments = useSegments();
   const [booting, setBooting] = React.useState(true);
-  const [onboarded, setOnboarded] = React.useState(true);
 
   React.useEffect(() => {
-    hasCompletedOnboarding().then((done) => {
-      setOnboarded(done);
+    hasCompletedOnboarding().then(() => {
       setBooting(false);
     });
   }, []);
 
+  // 完了直後はメモリ上の state が古いままなので、都度 AsyncStorage を見る
   React.useEffect(() => {
     if (booting) return;
-    const onOnboarding = segments[0] === 'onboarding';
-    if (!onboarded && !onOnboarding) {
-      router.replace('/onboarding');
-    }
-  }, [booting, onboarded, router, segments]);
+
+    void hasCompletedOnboarding().then((done) => {
+      const onOnboarding = segments[0] === 'onboarding';
+      if (!done && !onOnboarding) {
+        router.replace('/onboarding');
+      }
+    });
+  }, [booting, router, segments]);
 
   if (booting) {
     return (
