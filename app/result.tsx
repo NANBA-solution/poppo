@@ -1,8 +1,12 @@
+import { PoppoStampBar } from '@/components/PoppoStampBar';
 import { ShareCaptureFrame } from '@/components/ShareCaptureFrame';
 import { SocialShareButtons } from '@/components/SocialShareButtons';
 import { analyzePigeonWithClaude, type PigeonScanJson } from '@/services/aiService';
 import { detectNewAchievements } from '@/services/achievementService';
+import { detectNewQuests, getQuestById } from '@/services/questService';
 import { getPigeonCollection, savePigeonScan } from '@/services/collectionService';
+import { postStamp } from '@/services/feedService';
+import type { StampId } from '@/types/feed';
 import { ACHIEVEMENT_DEFS } from '@/types/achievement';
 import { hapticSuccess, hapticWarning } from '@/utils/haptics';
 import { sharePigeonImageWithFallback } from '@/utils/sharePigeon';
@@ -46,6 +50,9 @@ export default function ResultScreen() {
   const [aiError, setAiError] = React.useState<string | null>(null);
   const [savedEntryId, setSavedEntryId] = React.useState<string | null>(null);
   const [newAchievementTitle, setNewAchievementTitle] = React.useState<string | null>(null);
+  const [newQuestTitle, setNewQuestTitle] = React.useState<string | null>(null);
+  const [feedPostedLabel, setFeedPostedLabel] = React.useState<string | null>(null);
+  const [feedPosting, setFeedPosting] = React.useState(false);
   const [retryKey, setRetryKey] = React.useState(0);
 
   React.useEffect(() => {
@@ -55,6 +62,8 @@ export default function ResultScreen() {
       setAiError(null);
       setSavedEntryId(null);
       setNewAchievementTitle(null);
+      setNewQuestTitle(null);
+      setFeedPostedLabel(null);
       return;
     }
 
@@ -66,6 +75,8 @@ export default function ResultScreen() {
       setAiError(null);
       setSavedEntryId(null);
       setNewAchievementTitle(null);
+      setNewQuestTitle(null);
+      setFeedPostedLabel(null);
       try {
         const before = await getPigeonCollection();
         const result = await analyzePigeonWithClaude(imageUri);
@@ -82,6 +93,11 @@ export default function ResultScreen() {
               if (newIds.length > 0) {
                 const def = ACHIEVEMENT_DEFS.find((d) => d.id === newIds[0]);
                 if (def) setNewAchievementTitle(def.title);
+              }
+              const newQuestIds = detectNewQuests(before, after);
+              if (newQuestIds.length > 0) {
+                const quest = getQuestById(newQuestIds[0]);
+                if (quest) setNewQuestTitle(quest.title);
               }
             }
           } catch {
@@ -107,6 +123,23 @@ export default function ResultScreen() {
   const handleRetry = React.useCallback(() => {
     setRetryKey((k) => k + 1);
   }, []);
+
+  const handleFeedStamp = React.useCallback(
+    async (stampId: StampId) => {
+      if (!savedEntryId || feedPosting) return;
+      try {
+        setFeedPosting(true);
+        const entries = await getPigeonCollection();
+        const post = await postStamp(stampId, entries, { entryId: savedEntryId });
+        setFeedPostedLabel(post.stampLabel);
+      } catch {
+        Alert.alert('投稿エラー', 'フィードへの投稿に失敗しました。');
+      } finally {
+        setFeedPosting(false);
+      }
+    },
+    [feedPosting, savedEntryId],
+  );
 
   const handleShare = React.useCallback(async () => {
     if (!shareRef.current || !imageUri || !aiResult || shareBusy) return;
@@ -168,7 +201,26 @@ export default function ResultScreen() {
         </View>
       )}
 
+      {newQuestTitle && (
+        <View style={styles.questBanner}>
+          <Text style={styles.questBannerText}>🎯 クエスト達成: {newQuestTitle}</Text>
+        </View>
+      )}
+
+      {feedPostedLabel && (
+        <View style={styles.feedPostedBanner}>
+          <Text style={styles.feedPostedText}>💬 フィードに「{feedPostedLabel}」を送りました</Text>
+        </View>
+      )}
+
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        {aiPhase === 'success' && savedEntryId && (
+          <PoppoStampBar
+            onStamp={handleFeedStamp}
+            busy={feedPosting}
+            disabled={shareBusy}
+          />
+        )}
         {Platform.OS !== 'web' && aiPhase === 'success' && aiResult && (
           <SocialShareButtons
             shareRef={shareRef}
@@ -266,6 +318,38 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,200,80,0.35)',
   },
   achievementBannerText: {
+    color: '#ffd98a',
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  questBanner: {
+    marginHorizontal: 20,
+    marginBottom: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: 'rgba(124,184,255,0.12)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(124,184,255,0.35)',
+  },
+  questBannerText: {
+    color: '#c9d6ee',
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  feedPostedBanner: {
+    marginHorizontal: 20,
+    marginBottom: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,217,138,0.1)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,217,138,0.35)',
+  },
+  feedPostedText: {
     color: '#ffd98a',
     fontSize: 13,
     fontWeight: '700',

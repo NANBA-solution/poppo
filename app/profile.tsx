@@ -1,5 +1,14 @@
 import { computeCollectionStats, getPigeonCollection } from '@/services/collectionService';
+import {
+  AVATAR_SKINS,
+  DEFAULT_AVATAR_ID,
+  getAvatarSkin,
+  getSelectedAvatarId,
+  getUnlockedAvatarIds,
+  setSelectedAvatarId,
+} from '@/services/avatarService';
 import { getAchievements } from '@/services/achievementService';
+import { getPlayerTitle } from '@/services/titleService';
 import type { PigeonEntry } from '@/types/collection';
 import { hapticLight } from '@/utils/haptics';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -38,11 +47,6 @@ function formatDate(iso: string): string {
   }
 }
 
-function avatarStage(count: number): { emoji: string; label: string } {
-  if (count >= 10) return { emoji: '🕊️', label: 'ベテランぽっぽ' };
-  if (count >= 3) return { emoji: '🐦', label: '成長中のぽっぽ' };
-  return { emoji: '🥚', label: 'はじめてのぽっぽ' };
-}
 
 function filterAndSort(
   entries: PigeonEntry[],
@@ -74,12 +78,15 @@ export default function ProfileScreen() {
   const [refreshing, setRefreshing] = React.useState(false);
   const [query, setQuery] = React.useState('');
   const [sort, setSort] = React.useState<SortMode>('newest');
+  const [selectedAvatarId, setSelectedAvatarIdState] = React.useState(DEFAULT_AVATAR_ID);
 
   const loadEntries = React.useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     const data = await getPigeonCollection();
     setEntries(data);
+    const selected = await getSelectedAvatarId(data);
+    setSelectedAvatarIdState(selected);
     setLoading(false);
     setRefreshing(false);
   }, []);
@@ -99,23 +106,102 @@ export default function ProfileScreen() {
     });
   }, []);
 
-  const stage = avatarStage(entries.length);
+  const playerTitle = getPlayerTitle(entries.length);
   const stats = computeCollectionStats(entries);
   const achievements = getAchievements(entries);
+  const unlockedAvatarIds = React.useMemo(() => getUnlockedAvatarIds(entries), [entries]);
+  const selectedAvatar = getAvatarSkin(selectedAvatarId);
   const unlockedCount = achievements.filter((a) => a.unlocked).length;
   const visibleEntries = React.useMemo(
     () => filterAndSort(entries, query, sort),
     [entries, query, sort],
   );
 
+  const onSelectAvatar = React.useCallback(
+    async (id: string) => {
+      if (!unlockedAvatarIds.has(id) || id === selectedAvatarId) return;
+      void hapticLight();
+      setSelectedAvatarIdState(id);
+      await setSelectedAvatarId(id);
+    },
+    [selectedAvatarId, unlockedAvatarIds],
+  );
+
   const listHeader = (
     <>
       <View style={styles.hero}>
         <View style={styles.avatarRing}>
-          <Text style={styles.avatarEmoji}>{stage.emoji}</Text>
+          <Image source={selectedAvatar.image} style={styles.avatarImage} />
         </View>
-        <Text style={styles.stageLabel}>{stage.label}</Text>
+        <Text style={styles.stageLabel}>{playerTitle.title}</Text>
         <Text style={styles.countLabel}>{entries.length} 羽スキャン済み</Text>
+        {playerTitle.progressLabel && (
+          <Text style={styles.titleProgress}>{playerTitle.progressLabel}</Text>
+        )}
+        <Text style={styles.avatarName}>{selectedAvatar.name}</Text>
+      </View>
+
+      <View style={styles.quickNav}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/dex')}
+          style={({ pressed }) => [styles.quickNavBtn, pressed && styles.pressed]}
+        >
+          <Text style={styles.quickNavLabel}>📖 図鑑</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/quests')}
+          style={({ pressed }) => [styles.quickNavBtn, pressed && styles.pressed]}
+        >
+          <Text style={styles.quickNavLabel}>🎯 クエスト</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/feed')}
+          style={({ pressed }) => [styles.quickNavBtn, pressed && styles.pressed]}
+        >
+          <Text style={styles.quickNavLabel}>💬 フィード</Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.avatarPicker}>
+        {AVATAR_SKINS.map((skin) => {
+          const unlocked = unlockedAvatarIds.has(skin.id);
+          const selected = selectedAvatarId === skin.id;
+          return (
+            <Pressable
+              key={skin.id}
+              accessibilityRole="button"
+              accessibilityLabel={`${skin.name}${unlocked ? '' : ' ロック中'}`}
+              onPress={() => void onSelectAvatar(skin.id)}
+              disabled={!unlocked}
+              style={({ pressed }) => [
+                styles.avatarChip,
+                selected && styles.avatarChipSelected,
+                !unlocked && styles.avatarChipLocked,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Image source={skin.image} style={styles.avatarChipImage} />
+              <Text
+                style={[
+                  styles.avatarChipName,
+                  !unlocked && styles.avatarChipNameLocked,
+                  selected && styles.avatarChipNameSelected,
+                ]}
+                numberOfLines={1}
+              >
+                {skin.name}
+              </Text>
+              {!unlocked && (
+                <Text style={styles.avatarChipHint} numberOfLines={1}>
+                  {skin.unlockHint}
+                </Text>
+              )}
+            </Pressable>
+          );
+        })}
       </View>
 
       {entries.length > 0 && (
@@ -311,17 +397,18 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   avatarRing: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: 'rgba(124,184,255,0.12)',
+    width: 108,
+    height: 108,
+    borderRadius: 54,
+    backgroundColor: '#fff',
     borderWidth: 2,
     borderColor: 'rgba(124,184,255,0.45)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    overflow: 'hidden',
   },
-  avatarEmoji: {
-    fontSize: 44,
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
   },
   stageLabel: {
     color: '#c9d6ee',
@@ -332,6 +419,88 @@ const styles = StyleSheet.create({
   countLabel: {
     color: 'rgba(244,247,250,0.65)',
     fontSize: 13,
+  },
+  avatarName: {
+    color: '#ffd98a',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  titleProgress: {
+    color: 'rgba(201,214,238,0.55)',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  quickNav: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  quickNavBtn: {
+    flex: 1,
+    minWidth: '30%',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: 'rgba(124,184,255,0.12)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(124,184,255,0.3)',
+  },
+  quickNavLabel: {
+    color: '#c9d6ee',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  avatarPicker: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  avatarChip: {
+    width: '48%',
+    minWidth: 150,
+    flexGrow: 1,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(124,184,255,0.25)',
+    backgroundColor: 'rgba(124,184,255,0.08)',
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    gap: 6,
+  },
+  avatarChipImage: {
+    width: 72,
+    height: 72,
+    borderRadius: 10,
+    backgroundColor: '#fff',
+    resizeMode: 'cover',
+  },
+  avatarChipSelected: {
+    borderColor: 'rgba(255,217,138,0.8)',
+    backgroundColor: 'rgba(255,217,138,0.12)',
+  },
+  avatarChipLocked: {
+    opacity: 0.45,
+  },
+  avatarChipName: {
+    color: '#c9d6ee',
+    fontSize: 11,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  avatarChipNameSelected: {
+    color: '#ffd98a',
+  },
+  avatarChipNameLocked: {
+    color: 'rgba(201,214,238,0.7)',
+  },
+  avatarChipHint: {
+    color: 'rgba(201,214,238,0.65)',
+    fontSize: 9,
+    textAlign: 'center',
   },
   statsRow: {
     flexDirection: 'row',
