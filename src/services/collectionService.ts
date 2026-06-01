@@ -1,80 +1,18 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { isSupabaseConfigured } from '@/lib/supabaseConfig';
 import {
-  copyAsync,
-  deleteAsync,
-  documentDirectory,
-  makeDirectoryAsync,
-} from 'expo-file-system/legacy';
-
+  clearAllCollectionLocal,
+  deletePigeonScanLocal,
+  readAllLocal,
+  savePigeonScanLocal,
+} from '@/services/collectionService.local';
+import {
+  clearAllCollectionRemote,
+  deletePigeonScanRemote,
+  savePigeonScanRemote,
+  syncCollectionWithCloud,
+} from '@/services/collectionService.remote';
 import type { PigeonEntry } from '@/types/collection';
 import type { PigeonScanJson } from '@/services/aiService';
-
-const STORAGE_KEY = '@poppo/collection/v1';
-const SCAN_DIR = `${documentDirectory ?? ''}poppo-scans/`;
-
-async function ensureScanDir(): Promise<void> {
-  await makeDirectoryAsync(SCAN_DIR, { intermediates: true });
-}
-
-async function persistImage(sourceUri: string, id: string): Promise<string> {
-  await ensureScanDir();
-  const dest = `${SCAN_DIR}${id}.jpg`;
-  await copyAsync({ from: sourceUri, to: dest });
-  return dest;
-}
-
-async function readAll(): Promise<PigeonEntry[]> {
-  const raw = await AsyncStorage.getItem(STORAGE_KEY);
-  if (!raw) return [];
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isPigeonEntry);
-  } catch {
-    return [];
-  }
-}
-
-function isPigeonEntry(value: unknown): value is PigeonEntry {
-  if (typeof value !== 'object' || value === null) return false;
-  const v = value as Record<string, unknown>;
-  return (
-    typeof v.id === 'string' &&
-    typeof v.imageUri === 'string' &&
-    typeof v.breed === 'string' &&
-    typeof v.nickname === 'string' &&
-    typeof v.scannedAt === 'string'
-  );
-}
-
-/** 判定成功したスキャンを端末内コレクションに保存する */
-export async function savePigeonScan(
-  sourceUri: string,
-  result: PigeonScanJson,
-): Promise<PigeonEntry> {
-  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-  const imageUri = await persistImage(sourceUri, id);
-  const entry: PigeonEntry = {
-    id,
-    imageUri,
-    breed: result.breed,
-    nickname: result.nickname,
-    scannedAt: new Date().toISOString(),
-  };
-
-  const existing = await readAll();
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify([entry, ...existing]));
-  return entry;
-}
-
-export async function getPigeonCollection(): Promise<PigeonEntry[]> {
-  return readAll();
-}
-
-export async function getPigeonCount(): Promise<number> {
-  const all = await readAll();
-  return all.length;
-}
 
 export type CollectionStats = {
   total: number;
@@ -91,41 +29,69 @@ export function computeCollectionStats(entries: PigeonEntry[]): CollectionStats 
   };
 }
 
+export function isCollectionCloudEnabled(): boolean {
+  return isSupabaseConfigured();
+}
+
+export async function savePigeonScan(
+  sourceUri: string,
+  result: PigeonScanJson,
+): Promise<PigeonEntry> {
+  const entry = await savePigeonScanLocal(sourceUri, result);
+  if (isCollectionCloudEnabled()) {
+    try {
+      await savePigeonScanRemote(entry);
+    } catch (e) {
+      console.warn('[collection] cloud save failed:', e);
+    }
+  }
+  return entry;
+}
+
+export async function getPigeonCollection(): Promise<PigeonEntry[]> {
+  if (isCollectionCloudEnabled()) {
+    try {
+      return await syncCollectionWithCloud();
+    } catch (e) {
+      console.warn('[collection] cloud sync failed, using local:', e);
+    }
+  }
+  const local = await readAllLocal();
+  return [...local].sort(
+    (a, b) => new Date(b.scannedAt).getTime() - new Date(a.scannedAt).getTime(),
+  );
+}
+
+export async function getPigeonCount(): Promise<number> {
+  const all = await getPigeonCollection();
+  return all.length;
+}
+
 export async function getPigeonById(id: string): Promise<PigeonEntry | null> {
-  const all = await readAll();
+  const all = await getPigeonCollection();
   return all.find((entry) => entry.id === id) ?? null;
 }
 
-/** コレクションから1件削除する（画像ファイルも削除） */
 export async function deletePigeonScan(id: string): Promise<boolean> {
-  const all = await readAll();
-  const target = all.find((entry) => entry.id === id);
-  if (!target) return false;
-
-  const next = all.filter((entry) => entry.id !== id);
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-
-  if (target.imageUri.startsWith(SCAN_DIR)) {
+  const ok = await deletePigeonScanLocal(id);
+  if (ok && isCollectionCloudEnabled()) {
     try {
-      await deleteAsync(target.imageUri, { idempotent: true });
-    } catch {
-      // メタデータ削除は成功しているので画像削除失敗は無視
+      await deletePigeonScanRemote(id);
+    } catch (e) {
+      console.warn('[collection] cloud delete failed:', e);
     }
   }
-
-  return true;
+  return ok;
 }
 
-/** コレクションをすべて削除する（画像ファイルも削除） */
 export async function clearAllCollection(): Promise<number> {
-  const all = await readAll();
-  await Promise.all(
-    all
-      .filter((entry) => entry.imageUri.startsWith(SCAN_DIR))
-      .map((entry) =>
-        deleteAsync(entry.imageUri, { idempotent: true }).catch(() => undefined),
-      ),
-  );
-  await AsyncStorage.removeItem(STORAGE_KEY);
-  return all.length;
+  const count = await clearAllCollectionLocal();
+  if (isCollectionCloudEnabled()) {
+    try {
+      await clearAllCollectionRemote();
+    } catch (e) {
+      console.warn('[collection] cloud clear failed:', e);
+    }
+  }
+  return count;
 }
