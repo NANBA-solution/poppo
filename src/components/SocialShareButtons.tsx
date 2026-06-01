@@ -1,3 +1,6 @@
+import { AppIcon } from '@/components/icons/AppIcon';
+import { useI18n } from '@/i18n/I18nProvider';
+import { colors, radii } from '@/theme/tokens';
 import { captureShareImage, shareToInstagramStory, shareToX } from '@/utils/shareSocial';
 import { hapticLight } from '@/utils/haptics';
 import * as React from 'react';
@@ -24,6 +27,7 @@ export function SocialShareButtons({
   nickname,
   disabled = false,
 }: SocialShareButtonsProps) {
+  const { t } = useI18n();
   const [busy, setBusy] = React.useState<'instagram' | 'x' | null>(null);
 
   const runShare = React.useCallback(
@@ -40,14 +44,14 @@ export function SocialShareButtons({
         }
       } catch (e) {
         Alert.alert(
-          'シェアエラー',
-          e instanceof Error ? e.message : '共有に失敗しました。',
+          t.common.shareError,
+          e instanceof Error ? e.message : t.share.shareFailed,
         );
       } finally {
         setBusy(null);
       }
     },
-    [breed, busy, disabled, nickname, shareRef],
+    [breed, busy, disabled, nickname, shareRef, t.common.shareError, t.share.shareFailed],
   );
 
   const isDisabled = disabled || busy !== null;
@@ -56,7 +60,7 @@ export function SocialShareButtons({
     <View style={styles.row}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Instagram ストーリーに投稿"
+        accessibilityLabel={t.share.instagram}
         disabled={isDisabled}
         onPress={() => runShare('instagram')}
         style={({ pressed }) => [
@@ -70,15 +74,15 @@ export function SocialShareButtons({
           <ActivityIndicator color="#fff" />
         ) : (
           <>
-            <Text style={styles.btnEmoji}>📸</Text>
-            <Text style={styles.btnLabel}>Instagram{'\n'}ストーリー</Text>
+            <AppIcon name="instagram" size={22} color="#fff" />
+            <Text style={styles.btnLabel}>{t.share.instagram}</Text>
           </>
         )}
       </Pressable>
 
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="X にポスト"
+        accessibilityLabel={t.share.x}
         disabled={isDisabled}
         onPress={() => runShare('x')}
         style={({ pressed }) => [
@@ -92,8 +96,8 @@ export function SocialShareButtons({
           <ActivityIndicator color="#fff" />
         ) : (
           <>
-            <Text style={styles.btnEmoji}>𝕏</Text>
-            <Text style={styles.btnLabel}>X にポスト</Text>
+            <AppIcon name="x-logo" size={20} color="#fff" />
+            <Text style={styles.btnLabel}>{t.share.x}</Text>
           </>
         )}
       </Pressable>
@@ -109,25 +113,20 @@ const styles = StyleSheet.create({
   btn: {
     flex: 1,
     minHeight: 64,
-    borderRadius: 14,
+    borderRadius: radii.md,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
     paddingHorizontal: 8,
-    gap: 2,
+    gap: 6,
   },
   instagramBtn: {
     backgroundColor: '#E1306C',
   },
   xBtn: {
-    backgroundColor: '#111',
+    backgroundColor: colors.bgElevated,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
-  btnEmoji: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#fff',
+    borderColor: colors.border,
   },
   btnLabel: {
     color: '#fff',

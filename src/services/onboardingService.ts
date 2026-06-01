@@ -14,3 +14,8 @@ export async function completeOnboarding(): Promise<void> {
 export async function resetOnboarding(): Promise<void> {
   await AsyncStorage.removeItem(ONBOARDING_KEY);
 }
+
+/** オンボーディングとログイン画面を最初から */
+export async function resetOnboardingFlow(): Promise<void> {
+  await AsyncStorage.multiRemove([ONBOARDING_KEY, '@poppo/auth-welcome/v1']);
+}

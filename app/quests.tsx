@@ -1,11 +1,17 @@
+import { GlassCard } from '@/components/ui/GlassCard';
+import { Screen } from '@/components/ui/Screen';
+import { ScreenHeader } from '@/components/ui/ScreenHeader';
+import { formatMessage } from '@/i18n/format';
+import { useI18n } from '@/i18n/I18nProvider';
 import { getPigeonCollection } from '@/services/collectionService';
+import { AppIcon } from '@/components/icons/AppIcon';
 import { getQuests } from '@/services/questService';
+import { colors, spacing } from '@/theme/tokens';
 import type { PigeonEntry } from '@/types/collection';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import * as React from 'react';
 import {
   ActivityIndicator,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,8 +20,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function QuestsScreen() {
-  const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useI18n();
   const [loading, setLoading] = React.useState(true);
   const [entries, setEntries] = React.useState<PigeonEntry[]>([]);
 
@@ -34,94 +40,84 @@ export default function QuestsScreen() {
     }, []),
   );
 
-  const quests = React.useMemo(() => getQuests(entries), [entries]);
+  const quests = React.useMemo(() => getQuests(entries, t), [entries, t]);
   const completed = quests.filter((q) => q.completed).length;
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backLabel}>← 戻る</Text>
-        </Pressable>
-        <Text style={styles.title}>ぽっぽクエスト</Text>
-        <View style={styles.headerSpacer} />
+    <Screen edges={false}>
+      <View style={{ paddingTop: insets.top }}>
+        <ScreenHeader title={t.profile.questsTitle} />
       </View>
 
       {loading ? (
         <View style={styles.centered}>
-          <ActivityIndicator color="#c9d6ee" />
+          <ActivityIndicator color={colors.accent} />
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
           <Text style={styles.summary}>
-            達成 {completed}/{quests.length}
+            {formatMessage(t.profile.questsSummary, {
+              done: completed,
+              total: quests.length,
+            })}
           </Text>
           {quests.map((quest) => (
-            <View
+            <GlassCard
               key={quest.id}
-              style={[styles.card, quest.completed && styles.cardDone]}
+              style={styles.card}
+              highlighted={quest.completed}
             >
-              <Text style={styles.emoji}>{quest.emoji}</Text>
+              <View style={styles.iconWrap}>
+                <AppIcon name={quest.icon} size={26} color={colors.accent} />
+              </View>
               <View style={styles.cardBody}>
                 <Text style={styles.cardTitle}>{quest.title}</Text>
                 <Text style={styles.cardDesc}>{quest.description}</Text>
-                <Text style={styles.progress}>{quest.progress(entries)}</Text>
+                <Text style={styles.cardFlavor}>{quest.flavor}</Text>
+                <Text style={styles.progress}>{quest.progressLabel}</Text>
               </View>
-              <Text style={styles.badge}>{quest.completed ? '達成' : '未達成'}</Text>
-            </View>
+              <Text style={styles.badge}>
+                {quest.completed ? t.profile.questDone : t.profile.questPending}
+              </Text>
+            </GlassCard>
           ))}
         </ScrollView>
       )}
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0a0a0f' },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  backBtn: { minWidth: 72 },
-  backLabel: { color: '#7CB8FF', fontSize: 16, fontWeight: '700' },
-  title: {
-    flex: 1,
-    textAlign: 'center',
-    color: '#F4F7FA',
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  headerSpacer: { minWidth: 72 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   summary: {
-    color: 'rgba(201,214,238,0.7)',
+    color: colors.textMuted,
     fontSize: 14,
     fontWeight: '700',
     paddingHorizontal: 20,
     paddingBottom: 12,
   },
   card: {
-    marginHorizontal: 16,
-    marginBottom: 10,
-    padding: 14,
-    borderRadius: 14,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: 'rgba(13,17,26,0.92)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.12)',
   },
-  cardDone: {
-    borderColor: 'rgba(255,217,138,0.5)',
-    backgroundColor: 'rgba(255,217,138,0.08)',
+  iconWrap: {
+    width: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  emoji: { fontSize: 28 },
   cardBody: { flex: 1, gap: 4 },
-  cardTitle: { color: '#F4F7FA', fontSize: 16, fontWeight: '800' },
-  cardDesc: { color: 'rgba(244,247,250,0.7)', fontSize: 13, lineHeight: 18 },
-  progress: { color: 'rgba(201,214,238,0.55)', fontSize: 12, fontWeight: '700' },
-  badge: { color: '#ffd98a', fontSize: 12, fontWeight: '800' },
+  cardTitle: { color: colors.text, fontSize: 16, fontWeight: '800' },
+  cardDesc: { color: colors.textMuted, fontSize: 13, lineHeight: 18 },
+  cardFlavor: {
+    color: 'rgba(255,200,80,0.65)',
+    fontSize: 11,
+    lineHeight: 16,
+    fontStyle: 'italic',
+    fontWeight: '600',
+  },
+  progress: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
+  badge: { color: colors.gold, fontSize: 12, fontWeight: '800' },
 });

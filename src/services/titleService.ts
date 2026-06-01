@@ -1,3 +1,6 @@
+import { formatMessage } from '@/i18n/format';
+import type { TranslationTree } from '@/i18n/locales/ja';
+
 export type PlayerTitle = {
   title: string;
   subtitle: string;
@@ -5,32 +8,46 @@ export type PlayerTitle = {
   progressLabel: string | null;
 };
 
-const TIERS = [
-  { min: 0, title: 'そこらへんの人間', subtitle: 'まだハトとすれ違うだけ' },
-  { min: 1, title: '公園の見習い', subtitle: 'ぽっぽに目がいく' },
-  { min: 3, title: 'パンをくれるタイプ', subtitle: 'ハトに優しい' },
-  { min: 7, title: '街のハト通', subtitle: '二つ名が増えてきた' },
-  { min: 15, title: '実質ハト', subtitle: '羽ばたきが聞こえる' },
-  { min: 30, title: 'ハト界のレジェンド', subtitle: '伝説のぽっぽハンター' },
-] as const;
+const TIER_MINS = [0, 1, 3, 7, 15, 30] as const;
 
-export function getPlayerTitle(scanCount: number): PlayerTitle {
-  let current = TIERS[0];
-  let next: (typeof TIERS)[number] | null = TIERS[1] ?? null;
+function bestPoppoTitleKey(wins: number): keyof TranslationTree['titles']['best'] | null {
+  if (wins >= 30) return 'legend';
+  if (wins >= 10) return 'regular';
+  if (wins >= 3) return 'hunter';
+  if (wins >= 1) return 'once';
+  return null;
+}
 
-  for (let i = 0; i < TIERS.length; i++) {
-    if (scanCount >= TIERS[i].min) {
-      current = TIERS[i];
-      next = TIERS[i + 1] ?? null;
-    }
+export function getPlayerTitle(
+  scanCount: number,
+  bestPoppoWins = 0,
+  t: TranslationTree,
+): PlayerTitle {
+  const tiers = t.titles.tiers;
+  let tierIndex = 0;
+  for (let i = 0; i < TIER_MINS.length; i++) {
+    if (scanCount >= TIER_MINS[i]) tierIndex = i;
   }
 
+  const current = tiers[tierIndex];
+  const next = tiers[tierIndex + 1] ?? null;
+
   const progressLabel =
-    next != null ? `次の称号まで ${Math.max(0, next.min - scanCount)} 羽` : null;
+    next != null
+      ? formatMessage(t.titles.progressToNext, {
+          count: Math.max(0, TIER_MINS[tierIndex + 1] - scanCount),
+        })
+      : null;
+
+  const bestKey = bestPoppoTitleKey(bestPoppoWins);
+  const winnerTitle = bestKey ? t.titles.best[bestKey] : null;
 
   return {
-    title: current.title,
-    subtitle: current.subtitle,
+    title: winnerTitle ?? current.title,
+    subtitle:
+      winnerTitle != null
+        ? formatMessage(t.titles.bestWinsSubtitle, { count: bestPoppoWins })
+        : current.subtitle,
     nextTitle: next?.title ?? null,
     progressLabel,
   };

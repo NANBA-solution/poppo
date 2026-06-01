@@ -1,21 +1,16 @@
-import { PoppoStampBar } from '@/components/PoppoStampBar';
 import { ShareCaptureFrame } from '@/components/ShareCaptureFrame';
-import { SocialShareButtons } from '@/components/SocialShareButtons';
+import { ActionFooter, FooterButton } from '@/components/ui/ActionFooter';
+import { Screen } from '@/components/ui/Screen';
+import { useI18n } from '@/i18n/I18nProvider';
 import { analyzePigeonWithClaude, type PigeonScanJson } from '@/services/aiService';
-import { detectNewAchievements } from '@/services/achievementService';
-import { detectNewQuests, getQuestById } from '@/services/questService';
-import { getPigeonCollection, savePigeonScan } from '@/services/collectionService';
-import { postStamp } from '@/services/feedService';
-import type { StampId } from '@/types/feed';
-import { ACHIEVEMENT_DEFS } from '@/types/achievement';
+import { savePigeonScan } from '@/services/collectionService';
+import { colors } from '@/theme/tokens';
 import { hapticSuccess, hapticWarning } from '@/utils/haptics';
 import { sharePigeonImageWithFallback } from '@/utils/sharePigeon';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as React from 'react';
 import {
-  ActivityIndicator,
   Alert,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -38,6 +33,7 @@ function resolveUri(raw: string | string[] | undefined): string | undefined {
 export default function ResultScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useI18n();
   const { uri: uriParam } = useLocalSearchParams<{ uri?: string | string[] }>();
   const imageUri = resolveUri(uriParam);
 
@@ -49,10 +45,6 @@ export default function ResultScreen() {
   const [aiResult, setAiResult] = React.useState<PigeonScanJson | null>(null);
   const [aiError, setAiError] = React.useState<string | null>(null);
   const [savedEntryId, setSavedEntryId] = React.useState<string | null>(null);
-  const [newAchievementTitle, setNewAchievementTitle] = React.useState<string | null>(null);
-  const [newQuestTitle, setNewQuestTitle] = React.useState<string | null>(null);
-  const [feedPostedLabel, setFeedPostedLabel] = React.useState<string | null>(null);
-  const [feedPosting, setFeedPosting] = React.useState(false);
   const [retryKey, setRetryKey] = React.useState(0);
 
   React.useEffect(() => {
@@ -61,9 +53,6 @@ export default function ResultScreen() {
       setAiResult(null);
       setAiError(null);
       setSavedEntryId(null);
-      setNewAchievementTitle(null);
-      setNewQuestTitle(null);
-      setFeedPostedLabel(null);
       return;
     }
 
@@ -74,11 +63,7 @@ export default function ResultScreen() {
       setAiResult(null);
       setAiError(null);
       setSavedEntryId(null);
-      setNewAchievementTitle(null);
-      setNewQuestTitle(null);
-      setFeedPostedLabel(null);
       try {
-        const before = await getPigeonCollection();
         const result = await analyzePigeonWithClaude(imageUri);
         if (!cancelled) {
           setAiResult(result);
@@ -88,17 +73,6 @@ export default function ResultScreen() {
             const entry = await savePigeonScan(imageUri, result);
             if (!cancelled) {
               setSavedEntryId(entry.id);
-              const after = await getPigeonCollection();
-              const newIds = detectNewAchievements(before, after);
-              if (newIds.length > 0) {
-                const def = ACHIEVEMENT_DEFS.find((d) => d.id === newIds[0]);
-                if (def) setNewAchievementTitle(def.title);
-              }
-              const newQuestIds = detectNewQuests(before, after);
-              if (newQuestIds.length > 0) {
-                const quest = getQuestById(newQuestIds[0]);
-                if (quest) setNewQuestTitle(quest.title);
-              }
             }
           } catch {
             // 保存失敗は判定表示を妨げない
@@ -108,7 +82,7 @@ export default function ResultScreen() {
         if (!cancelled) {
           void hapticWarning();
           setAiError(
-            e instanceof Error ? e.message : '判定に失敗しました。時間をおいて試してください。',
+            e instanceof Error ? e.message : t.scan.analyzeFailed,
           );
           setAiPhase('error');
         }
@@ -118,28 +92,11 @@ export default function ResultScreen() {
     return () => {
       cancelled = true;
     };
-  }, [imageUri, retryKey]);
+  }, [imageUri, retryKey, t]);
 
   const handleRetry = React.useCallback(() => {
     setRetryKey((k) => k + 1);
   }, []);
-
-  const handleFeedStamp = React.useCallback(
-    async (stampId: StampId) => {
-      if (!savedEntryId || feedPosting) return;
-      try {
-        setFeedPosting(true);
-        const entries = await getPigeonCollection();
-        const post = await postStamp(stampId, entries, { entryId: savedEntryId });
-        setFeedPostedLabel(post.stampLabel);
-      } catch {
-        Alert.alert('投稿エラー', 'フィードへの投稿に失敗しました。');
-      } finally {
-        setFeedPosting(false);
-      }
-    },
-    [feedPosting, savedEntryId],
-  );
 
   const handleShare = React.useCallback(async () => {
     if (!shareRef.current || !imageUri || !aiResult || shareBusy) return;
@@ -153,18 +110,18 @@ export default function ResultScreen() {
       await sharePigeonImageWithFallback(fileUri, aiResult.breed, aiResult.nickname);
     } catch (e) {
       Alert.alert(
-        'シェアエラー',
-        e instanceof Error ? e.message : '画像の共有に失敗しました。',
+        t.common.shareError,
+        e instanceof Error ? e.message : t.common.shareFailed,
       );
     } finally {
       setShareBusy(false);
     }
-  }, [aiResult, imageUri, shareBusy]);
+  }, [aiResult, imageUri, shareBusy, t.common.shareError, t.common.shareFailed]);
 
   const cardPhase = aiPhase === 'idle' ? 'loading' : aiPhase;
 
   return (
-    <View style={styles.root}>
+    <Screen edges={false}>
       <View style={[styles.stage, { paddingTop: insets.top }]}>
         {imageUri ? (
           <View ref={shareRef} style={styles.shareWrap} collapsable={false}>
@@ -173,110 +130,55 @@ export default function ResultScreen() {
               phase={cardPhase}
               result={aiResult}
               error={aiError}
+              minimal
             />
           </View>
         ) : (
-          <Text style={styles.missing}>画像の URI がありません。</Text>
+          <Text style={styles.missing}>{t.scan.missingUri}</Text>
         )}
       </View>
 
-      {aiPhase === 'success' && savedEntryId && (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="コレクションの詳細を見る"
-          onPress={() =>
-            router.push({ pathname: '/entry/[id]', params: { id: savedEntryId } })
-          }
-          style={({ pressed }) => [styles.savedBanner, pressed && styles.btnPressed]}
-        >
-          <Text style={styles.savedBannerText}>✓ コレクションに保存しました · 詳細を見る</Text>
-        </Pressable>
-      )}
-
-      {newAchievementTitle && (
-        <View style={styles.achievementBanner}>
-          <Text style={styles.achievementBannerText}>
-            🏆 実績解除: {newAchievementTitle}
-          </Text>
-        </View>
-      )}
-
-      {newQuestTitle && (
-        <View style={styles.questBanner}>
-          <Text style={styles.questBannerText}>🎯 クエスト達成: {newQuestTitle}</Text>
-        </View>
-      )}
-
-      {feedPostedLabel && (
-        <View style={styles.feedPostedBanner}>
-          <Text style={styles.feedPostedText}>💬 フィードに「{feedPostedLabel}」を送りました</Text>
-        </View>
-      )}
-
-      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+      <ActionFooter>
         {aiPhase === 'success' && savedEntryId && (
-          <PoppoStampBar
-            onStamp={handleFeedStamp}
-            busy={feedPosting}
-            disabled={shareBusy}
-          />
-        )}
-        {Platform.OS !== 'web' && aiPhase === 'success' && aiResult && (
-          <SocialShareButtons
-            shareRef={shareRef}
-            breed={aiResult.breed}
-            nickname={aiResult.nickname}
-            disabled={shareBusy}
-          />
-        )}
-        <View style={styles.footerRow}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="結果を画像としてシェア"
-            disabled={!imageUri || shareBusy || aiPhase !== 'success' || !aiResult}
-            onPress={handleShare}
-            style={({ pressed }) => [
-              styles.shareBtn,
-              pressed && styles.btnPressed,
-              (!imageUri || shareBusy || aiPhase !== 'success' || !aiResult) && styles.btnDisabled,
-            ]}
+            onPress={() =>
+              router.push({ pathname: '/entry/[id]', params: { id: savedEntryId } })
+            }
+            style={({ pressed }) => [styles.savedLink, pressed && styles.pressed]}
           >
-            {shareBusy ? (
-              <ActivityIndicator color="#0a2540" />
-            ) : (
-              <Text style={styles.shareBtnLabel}>画像をシェア</Text>
-            )}
+            <Text style={styles.savedLinkText}>
+              {t.scan.saved} · {t.scan.savedAction}
+            </Text>
           </Pressable>
+        )}
+        <View style={styles.footerRow}>
+          <FooterButton
+            label={t.common.share}
+            onPress={handleShare}
+            disabled={!imageUri || shareBusy || aiPhase !== 'success' || !aiResult}
+            loading={shareBusy}
+          />
           {aiPhase === 'error' ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="判定を再試行"
+            <FooterButton
+              label={t.scan.retry}
+              variant="secondary"
               onPress={handleRetry}
-              style={({ pressed }) => [styles.retryBtn, pressed && styles.btnPressed]}
-            >
-              <Text style={styles.retryBtnLabel}>再判定</Text>
-            </Pressable>
+            />
           ) : (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="撮影し直す"
+            <FooterButton
+              label={t.scan.retake}
+              variant="ghost"
               onPress={() => router.back()}
-              style={({ pressed }) => [styles.retakeBtn, pressed && styles.btnPressed]}
-            >
-              <Text style={styles.retakeBtnLabel}>撮影し直す</Text>
-            </Pressable>
+            />
           )}
         </View>
-      </View>
-    </View>
+      </ActionFooter>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: '#0a0a0f',
-  },
   stage: {
     flex: 1,
     minHeight: 0,
@@ -286,133 +188,25 @@ const styles = StyleSheet.create({
   },
   missing: {
     flex: 1,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.textMuted,
     textAlign: 'center',
     fontSize: 16,
     padding: 24,
   },
-  savedBanner: {
-    marginHorizontal: 20,
-    marginBottom: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    backgroundColor: 'rgba(124,184,255,0.15)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(124,184,255,0.35)',
+  savedLink: {
+    alignItems: 'center',
+    paddingVertical: 4,
   },
-  savedBannerText: {
-    color: '#c9d6ee',
+  savedLinkText: {
+    color: colors.gold,
     fontSize: 13,
     fontWeight: '700',
-    textAlign: 'center',
   },
-  achievementBanner: {
-    marginHorizontal: 20,
-    marginBottom: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,200,80,0.12)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,200,80,0.35)',
-  },
-  achievementBannerText: {
-    color: '#ffd98a',
-    fontSize: 13,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  questBanner: {
-    marginHorizontal: 20,
-    marginBottom: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    backgroundColor: 'rgba(124,184,255,0.12)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(124,184,255,0.35)',
-  },
-  questBannerText: {
-    color: '#c9d6ee',
-    fontSize: 13,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  feedPostedBanner: {
-    marginHorizontal: 20,
-    marginBottom: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,217,138,0.1)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,217,138,0.35)',
-  },
-  feedPostedText: {
-    color: '#ffd98a',
-    fontSize: 13,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  footer: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.12)',
-    backgroundColor: '#101016',
-    gap: 10,
+  pressed: {
+    opacity: 0.85,
   },
   footerRow: {
     flexDirection: 'row',
     gap: 12,
-  },
-  shareBtn: {
-    flex: 1,
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    backgroundColor: '#7CB8FF',
-    minHeight: 52,
-    justifyContent: 'center',
-  },
-  shareBtnLabel: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0a2540',
-  },
-  retryBtn: {
-    flex: 1,
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,180,100,0.18)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,180,100,0.4)',
-    justifyContent: 'center',
-  },
-  retryBtnLabel: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#ffd4a8',
-  },
-  retakeBtn: {
-    flex: 1,
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    justifyContent: 'center',
-  },
-  retakeBtnLabel: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#111',
-  },
-  btnPressed: {
-    opacity: 0.9,
-  },
-  btnDisabled: {
-    opacity: 0.45,
   },
 });

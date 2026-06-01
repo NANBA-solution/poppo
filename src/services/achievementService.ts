@@ -1,5 +1,6 @@
-import type { PigeonEntry } from '@/types/collection';
+import type { TranslationTree } from '@/i18n/locales/ja';
 import { ACHIEVEMENT_DEFS, type Achievement, type AchievementId } from '@/types/achievement';
+import type { PigeonEntry } from '@/types/collection';
 
 function statsFromEntries(entries: PigeonEntry[]) {
   return {
@@ -8,29 +9,34 @@ function statsFromEntries(entries: PigeonEntry[]) {
   };
 }
 
-export function getAchievements(entries: PigeonEntry[]): Achievement[] {
+export function getAchievements(entries: PigeonEntry[], t: TranslationTree): Achievement[] {
   const stats = statsFromEntries(entries);
-  return ACHIEVEMENT_DEFS.map((def) => ({
-    ...def,
-    unlocked: def.check(stats),
-  }));
+  return ACHIEVEMENT_DEFS.map((def) => {
+    const copy = t.achievements.items[def.id];
+    return {
+      ...def,
+      title: copy.title,
+      description: copy.description,
+      unlocked: def.check(stats),
+    };
+  });
 }
 
-export function getUnlockedAchievements(entries: PigeonEntry[]): Achievement[] {
-  return getAchievements(entries).filter((a) => a.unlocked);
+export function getAchievementTitle(id: AchievementId, t: TranslationTree): string {
+  return t.achievements.items[id].title;
 }
 
-/** 保存前後で新たに解除された実績 ID を返す */
 export function detectNewAchievements(
   before: PigeonEntry[],
   after: PigeonEntry[],
+  t: TranslationTree,
 ): AchievementId[] {
   const beforeUnlocked = new Set(
-    getAchievements(before)
+    getAchievements(before, t)
       .filter((a) => a.unlocked)
       .map((a) => a.id),
   );
-  return getAchievements(after)
+  return getAchievements(after, t)
     .filter((a) => a.unlocked && !beforeUnlocked.has(a.id))
     .map((a) => a.id);
 }

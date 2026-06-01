@@ -1,13 +1,27 @@
-import { computeCollectionStats, getPigeonCollection } from '@/services/collectionService';
+import { getPigeonCollection } from '@/services/collectionService';
+import { AppIcon } from '@/components/icons/AppIcon';
 import {
-  AVATAR_SKINS,
   DEFAULT_AVATAR_ID,
+  getAvatarName,
   getAvatarSkin,
+  getAvatarSkins,
   getSelectedAvatarId,
   getUnlockedAvatarIds,
   setSelectedAvatarId,
 } from '@/services/avatarService';
-import { getAchievements } from '@/services/achievementService';
+import {
+  DEFAULT_DISPLAY_NAME,
+  getMyProfile,
+  isAuthCloudEnabled,
+  syncProfile,
+  updateDisplayName,
+} from '@/services/authService';
+import { Screen } from '@/components/ui/Screen';
+import { ScreenHeader } from '@/components/ui/ScreenHeader';
+import { formatMessage } from '@/i18n/format';
+import { useI18n } from '@/i18n/I18nProvider';
+import { colors } from '@/theme/tokens';
+import { formatShortDateTime } from '@/utils/formatDate';
 import { getPlayerTitle } from '@/services/titleService';
 import type { PigeonEntry } from '@/types/collection';
 import { hapticLight } from '@/utils/haptics';
@@ -27,26 +41,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type SortMode = 'newest' | 'oldest' | 'breed';
-
-const SORT_LABEL: Record<SortMode, string> = {
-  newest: '新しい順',
-  oldest: '古い順',
-  breed: '品種順',
-};
-
-function formatDate(iso: string): string {
-  try {
-    return new Intl.DateTimeFormat('ja-JP', {
-      month: 'numeric',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(new Date(iso));
-  } catch {
-    return '';
-  }
-}
-
 
 function filterAndSort(
   entries: PigeonEntry[],
@@ -73,12 +67,26 @@ function filterAndSort(
 export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t, locale } = useI18n();
+
+  const sortLabels: Record<SortMode, string> = React.useMemo(
+    () => ({
+      newest: t.profile.sortNewest,
+      oldest: t.profile.sortOldest,
+      breed: t.profile.sortBreed,
+    }),
+    [t.profile.sortBreed, t.profile.sortNewest, t.profile.sortOldest],
+  );
   const [entries, setEntries] = React.useState<PigeonEntry[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [query, setQuery] = React.useState('');
   const [sort, setSort] = React.useState<SortMode>('newest');
   const [selectedAvatarId, setSelectedAvatarIdState] = React.useState(DEFAULT_AVATAR_ID);
+  const [displayName, setDisplayName] = React.useState(DEFAULT_DISPLAY_NAME);
+  const [savingName, setSavingName] = React.useState(false);
+  const [bestPoppoWins, setBestPoppoWins] = React.useState(0);
+  const [avatarExpanded, setAvatarExpanded] = React.useState(false);
 
   const loadEntries = React.useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -87,9 +95,36 @@ export default function ProfileScreen() {
     setEntries(data);
     const selected = await getSelectedAvatarId(data);
     setSelectedAvatarIdState(selected);
+    if (isAuthCloudEnabled()) {
+      const profile = await getMyProfile();
+      if (profile) {
+        setDisplayName(profile.displayName);
+        setBestPoppoWins(profile.bestPoppoWins);
+      }
+    }
     setLoading(false);
     setRefreshing(false);
   }, []);
+
+  const onSaveDisplayName = React.useCallback(async () => {
+    if (!isAuthCloudEnabled() || savingName) return;
+    const trimmed = displayName.trim();
+    if (!trimmed) {
+      setDisplayName(DEFAULT_DISPLAY_NAME);
+      return;
+    }
+    try {
+      setSavingName(true);
+      await updateDisplayName(trimmed);
+      setDisplayName(trimmed);
+      void hapticLight();
+    } catch {
+      const profile = await getMyProfile();
+      if (profile) setDisplayName(profile.displayName);
+    } finally {
+      setSavingName(false);
+    }
+  }, [displayName, savingName]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -106,12 +141,10 @@ export default function ProfileScreen() {
     });
   }, []);
 
-  const playerTitle = getPlayerTitle(entries.length);
-  const stats = computeCollectionStats(entries);
-  const achievements = getAchievements(entries);
+  const playerTitle = getPlayerTitle(entries.length, bestPoppoWins, t);
   const unlockedAvatarIds = React.useMemo(() => getUnlockedAvatarIds(entries), [entries]);
+  const lockedAvatarCount = getAvatarSkins().length - unlockedAvatarIds.size;
   const selectedAvatar = getAvatarSkin(selectedAvatarId);
-  const unlockedCount = achievements.filter((a) => a.unlocked).length;
   const visibleEntries = React.useMemo(
     () => filterAndSort(entries, query, sort),
     [entries, query, sort],
@@ -123,23 +156,72 @@ export default function ProfileScreen() {
       void hapticLight();
       setSelectedAvatarIdState(id);
       await setSelectedAvatarId(id);
+      if (isAuthCloudEnabled()) {
+        await syncProfile(id);
+      }
     },
     [selectedAvatarId, unlockedAvatarIds],
   );
 
+  const onToggleAvatarPicker = React.useCallback(() => {
+    void hapticLight();
+    setAvatarExpanded((open) => !open);
+  }, []);
+
   const listHeader = (
     <>
       <View style={styles.hero}>
-        <View style={styles.avatarRing}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={avatarExpanded ? t.profile.avatarCollapse : t.profile.avatarChange}
+          onPress={onToggleAvatarPicker}
+          style={({ pressed }) => [styles.avatarRing, pressed && styles.pressed]}
+        >
           <Image source={selectedAvatar.image} style={styles.avatarImage} />
-        </View>
+        </Pressable>
         <Text style={styles.stageLabel}>{playerTitle.title}</Text>
-        <Text style={styles.countLabel}>{entries.length} 羽スキャン済み</Text>
-        {playerTitle.progressLabel && (
-          <Text style={styles.titleProgress}>{playerTitle.progressLabel}</Text>
+        <Text style={styles.countLabel}>
+          {entries.length} {t.profile.scans}
+        </Text>
+        <Text style={styles.avatarName}>{getAvatarName(selectedAvatarId, t)}</Text>
+        {!avatarExpanded && (
+          <Pressable
+            accessibilityRole="button"
+            onPress={onToggleAvatarPicker}
+            style={({ pressed }) => [styles.avatarToggleBtn, pressed && styles.pressed]}
+          >
+            <Text style={styles.avatarToggleLabel}>{t.profile.avatarChange}</Text>
+            {lockedAvatarCount > 0 && (
+              <Text style={styles.avatarToggleHint}>
+                {formatMessage(t.profile.avatarLockedCount, { count: lockedAvatarCount })}
+              </Text>
+            )}
+            <AppIcon name="chevron-right" size={16} color={colors.textMuted} />
+          </Pressable>
         )}
-        <Text style={styles.avatarName}>{selectedAvatar.name}</Text>
       </View>
+
+      {isAuthCloudEnabled() && (
+        <View style={styles.displayNameSection}>
+          <Text style={styles.displayNameLabel}>{t.profile.feedName}</Text>
+          <View style={styles.displayNameRow}>
+            <TextInput
+              value={displayName}
+              onChangeText={setDisplayName}
+              onEndEditing={() => void onSaveDisplayName()}
+              onSubmitEditing={() => void onSaveDisplayName()}
+              maxLength={20}
+              placeholder={DEFAULT_DISPLAY_NAME}
+              placeholderTextColor="rgba(201,214,238,0.35)"
+              style={styles.displayNameInput}
+              returnKeyType="done"
+              editable={!savingName}
+            />
+            {savingName && <ActivityIndicator size="small" color={colors.accent} />}
+          </View>
+          <Text style={styles.displayNameHint}>{t.profile.feedNameHint}</Text>
+        </View>
+      )}
 
       <View style={styles.quickNav}>
         <Pressable
@@ -147,129 +229,94 @@ export default function ProfileScreen() {
           onPress={() => router.push('/dex')}
           style={({ pressed }) => [styles.quickNavBtn, pressed && styles.pressed]}
         >
-          <Text style={styles.quickNavLabel}>📖 図鑑</Text>
+          <AppIcon name="book" size={16} color={colors.accent} />
+          <Text style={styles.quickNavLabel}>{t.profile.dex}</Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
           onPress={() => router.push('/quests')}
           style={({ pressed }) => [styles.quickNavBtn, pressed && styles.pressed]}
         >
-          <Text style={styles.quickNavLabel}>🎯 クエスト</Text>
+          <AppIcon name="target" size={16} color={colors.accent} />
+          <Text style={styles.quickNavLabel}>{t.profile.quests}</Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
           onPress={() => router.push('/feed')}
           style={({ pressed }) => [styles.quickNavBtn, pressed && styles.pressed]}
         >
-          <Text style={styles.quickNavLabel}>💬 フィード</Text>
+          <AppIcon name="feed" size={16} color={colors.accent} />
+          <Text style={styles.quickNavLabel}>{t.profile.feed}</Text>
         </Pressable>
       </View>
 
-      <View style={styles.avatarPicker}>
-        {AVATAR_SKINS.map((skin) => {
-          const unlocked = unlockedAvatarIds.has(skin.id);
-          const selected = selectedAvatarId === skin.id;
-          return (
+      {avatarExpanded && (
+        <View style={styles.avatarPickerSection}>
+          <View style={styles.avatarPickerHeader}>
+            <Text style={styles.avatarPickerTitle}>{t.profile.avatarChange}</Text>
             <Pressable
-              key={skin.id}
               accessibilityRole="button"
-              accessibilityLabel={`${skin.name}${unlocked ? '' : ' ロック中'}`}
-              onPress={() => void onSelectAvatar(skin.id)}
-              disabled={!unlocked}
-              style={({ pressed }) => [
-                styles.avatarChip,
-                selected && styles.avatarChipSelected,
-                !unlocked && styles.avatarChipLocked,
-                pressed && styles.pressed,
-              ]}
+              onPress={onToggleAvatarPicker}
+              style={({ pressed }) => [styles.avatarCollapseBtn, pressed && styles.pressed]}
             >
-              <Image source={skin.image} style={styles.avatarChipImage} />
-              <Text
-                style={[
-                  styles.avatarChipName,
-                  !unlocked && styles.avatarChipNameLocked,
-                  selected && styles.avatarChipNameSelected,
-                ]}
-                numberOfLines={1}
-              >
-                {skin.name}
-              </Text>
-              {!unlocked && (
-                <Text style={styles.avatarChipHint} numberOfLines={1}>
-                  {skin.unlockHint}
-                </Text>
-              )}
+              <Text style={styles.avatarCollapseLabel}>{t.profile.avatarCollapse}</Text>
             </Pressable>
-          );
-        })}
-      </View>
-
-      {entries.length > 0 && (
-        <>
-          <View style={styles.statsRow}>
-            <View style={styles.statChip}>
-              <Text style={styles.statValue}>{stats.total}</Text>
-              <Text style={styles.statLabel}>総スキャン</Text>
-            </View>
-            <View style={styles.statChip}>
-              <Text style={styles.statValue}>{stats.uniqueBreeds}</Text>
-              <Text style={styles.statLabel}>品種数</Text>
-            </View>
-            {stats.latestNickname && (
-              <View style={[styles.statChip, styles.statChipWide]}>
-                <Text style={styles.statValueSmall} numberOfLines={1}>
-                  {stats.latestNickname}
-                </Text>
-                <Text style={styles.statLabel}>最新の二つ名</Text>
-              </View>
-            )}
           </View>
-
-          <View style={styles.achievementsSection}>
-            <View style={styles.achievementsHeader}>
-              <Text style={styles.achievementsTitle}>実績</Text>
-              <Text style={styles.achievementsCount}>
-                {unlockedCount}/{achievements.length}
-              </Text>
-            </View>
-            <View style={styles.achievementsGrid}>
-              {achievements.map((item) => (
-                <View
-                  key={item.id}
-                  style={[styles.achievementChip, !item.unlocked && styles.achievementLocked]}
+          <View style={styles.avatarPicker}>
+            {getAvatarSkins().map((skin) => {
+              const unlocked = unlockedAvatarIds.has(skin.id);
+              const selected = selectedAvatarId === skin.id;
+              return (
+                <Pressable
+                  key={skin.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${getAvatarName(skin.id, t)}${unlocked ? '' : ` ${t.common.locked}`}`}
+                  onPress={() => void onSelectAvatar(skin.id)}
+                  disabled={!unlocked}
+                  style={({ pressed }) => [
+                    styles.avatarChip,
+                    selected && styles.avatarChipSelected,
+                    !unlocked && styles.avatarChipLocked,
+                    pressed && styles.pressed,
+                  ]}
                 >
-                  <Text style={styles.achievementEmoji}>{item.emoji}</Text>
+                  <Image source={skin.image} style={styles.avatarChipImage} />
                   <Text
                     style={[
-                      styles.achievementLabel,
-                      !item.unlocked && styles.achievementLabelLocked,
+                      styles.avatarChipName,
+                      !unlocked && styles.avatarChipNameLocked,
+                      selected && styles.avatarChipNameSelected,
                     ]}
                     numberOfLines={1}
                   >
-                    {item.title}
+                    {getAvatarName(skin.id, t)}
                   </Text>
-                </View>
-              ))}
-            </View>
+                </Pressable>
+              );
+            })}
           </View>
+        </View>
+      )}
 
+      {entries.length > 0 && (
+        <>
           <View style={styles.tools}>
             <TextInput
               value={query}
               onChangeText={setQuery}
-              placeholder="品種・二つ名で検索"
-              placeholderTextColor="rgba(201,214,238,0.4)"
+              placeholder={t.profile.searchPlaceholder}
+              placeholderTextColor={colors.textMuted}
               style={styles.searchInput}
               clearButtonMode="while-editing"
-              accessibilityLabel="コレクションを検索"
+              accessibilityLabel={t.profile.searchPlaceholder}
             />
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`並び替え ${SORT_LABEL[sort]}`}
+              accessibilityLabel={`${sortLabels[sort]}`}
               onPress={cycleSort}
               style={({ pressed }) => [styles.sortBtn, pressed && styles.pressed]}
             >
-              <Text style={styles.sortBtnLabel}>{SORT_LABEL[sort]}</Text>
+              <Text style={styles.sortBtnLabel}>{sortLabels[sort]}</Text>
             </Pressable>
           </View>
         </>
@@ -278,37 +325,33 @@ export default function ProfileScreen() {
   );
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="カメラに戻る"
-          onPress={() => router.back()}
-          style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
-        >
-          <Text style={styles.backLabel}>← カメラ</Text>
-        </Pressable>
-        <Text style={styles.title}>マイぽっぽ</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="設定を開く"
-          onPress={() => router.push('/settings')}
-          style={({ pressed }) => [styles.settingsBtn, pressed && styles.pressed]}
-        >
-          <Text style={styles.settingsLabel}>⚙️</Text>
-        </Pressable>
+    <Screen edges={false}>
+      <View style={{ paddingTop: insets.top }}>
+        <ScreenHeader
+          title={t.profile.title}
+          right={
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t.common.settings}
+              onPress={() => router.push('/settings')}
+              style={({ pressed }) => [styles.settingsBtn, pressed && styles.pressed]}
+            >
+              <AppIcon name="settings" size={22} color={colors.accent} />
+            </Pressable>
+          }
+        />
       </View>
 
       {loading ? (
         <View style={styles.centered}>
-          <ActivityIndicator color="#c9d6ee" />
+          <ActivityIndicator color={colors.accent} />
         </View>
       ) : entries.length === 0 ? (
         <>
           {listHeader}
           <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>まだコレクションがありません</Text>
-            <Text style={styles.emptyBody}>ハトを撮影して、最初のぽっぽをゲットしよう。</Text>
+            <Text style={styles.emptyTitle}>{t.profile.emptyTitle}</Text>
+            <Text style={styles.emptyBody}>{t.profile.emptyBody}</Text>
           </View>
         </>
       ) : (
@@ -317,7 +360,9 @@ export default function ProfileScreen() {
           keyExtractor={(item) => item.id}
           ListHeaderComponent={listHeader}
           ListEmptyComponent={
-            <Text style={styles.noMatch}>「{query}」に一致するぽっぽはありません。</Text>
+            <Text style={styles.noMatch}>
+              {formatMessage(t.profile.noMatch, { query })}
+            </Text>
           }
           contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) }}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
@@ -326,13 +371,13 @@ export default function ProfileScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => loadEntries(true)}
-              tintColor="#c9d6ee"
+              tintColor={colors.accent}
             />
           }
           renderItem={({ item }) => (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`${item.breed}、${item.nickname}の詳細を見る`}
+              accessibilityLabel={`${item.breed}、${item.nickname}`}
               onPress={() => router.push({ pathname: '/entry/[id]', params: { id: item.id } })}
               style={({ pressed }) => [styles.card, pressed && styles.pressed]}
             >
@@ -340,45 +385,20 @@ export default function ProfileScreen() {
               <View style={styles.cardBody}>
                 <Text style={styles.cardBreed}>{item.breed}</Text>
                 <Text style={styles.cardNickname}>{item.nickname}</Text>
-                <Text style={styles.cardDate}>{formatDate(item.scannedAt)}</Text>
+                <Text style={styles.cardDate}>
+                  {formatShortDateTime(item.scannedAt, locale)}
+                </Text>
               </View>
-              <Text style={styles.chevron}>›</Text>
+              <AppIcon name="chevron-right" size={20} color={colors.textMuted} />
             </Pressable>
           )}
         />
       )}
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: '#0a0a0f',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  backBtn: {
-    paddingVertical: 6,
-    paddingRight: 12,
-    minWidth: 72,
-  },
-  backLabel: {
-    color: '#7CB8FF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  title: {
-    flex: 1,
-    textAlign: 'center',
-    color: '#F4F7FA',
-    fontSize: 18,
-    fontWeight: '800',
-  },
   settingsBtn: {
     minWidth: 72,
     alignItems: 'flex-end',
@@ -402,7 +422,7 @@ const styles = StyleSheet.create({
     borderRadius: 54,
     backgroundColor: '#fff',
     borderWidth: 2,
-    borderColor: 'rgba(124,184,255,0.45)',
+    borderColor: colors.borderStrong,
     overflow: 'hidden',
   },
   avatarImage: {
@@ -411,7 +431,7 @@ const styles = StyleSheet.create({
     resizeMode: 'cover',
   },
   stageLabel: {
-    color: '#c9d6ee',
+    color: colors.accent,
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: 1,
@@ -421,14 +441,86 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   avatarName: {
-    color: '#ffd98a',
+    color: colors.gold,
     fontSize: 13,
     fontWeight: '700',
   },
-  titleProgress: {
-    color: 'rgba(201,214,238,0.55)',
+  avatarToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: colors.accentSoft,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderStrong,
+  },
+  avatarToggleLabel: {
+    color: colors.accent,
     fontSize: 12,
+    fontWeight: '700',
+  },
+  avatarToggleHint: {
+    color: 'rgba(201,214,238,0.45)',
+    fontSize: 10,
     fontWeight: '600',
+  },
+  avatarPickerSection: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    gap: 8,
+  },
+  avatarPickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  avatarPickerTitle: {
+    color: 'rgba(201,214,238,0.75)',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  avatarCollapseBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  avatarCollapseLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  displayNameSection: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    gap: 6,
+  },
+  displayNameLabel: {
+    color: 'rgba(201,214,238,0.7)',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  displayNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  displayNameInput: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '700',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: colors.accentSoft,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderStrong,
+  },
+  displayNameHint: {
+    color: 'rgba(201,214,238,0.45)',
+    fontSize: 11,
   },
   quickNav: {
     flexDirection: 'row',
@@ -442,18 +534,19 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: 'center',
-    backgroundColor: 'rgba(124,184,255,0.12)',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: colors.accentSoft,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(124,184,255,0.3)',
+    borderColor: colors.borderStrong,
   },
   quickNavLabel: {
-    color: '#c9d6ee',
+    color: colors.accent,
     fontSize: 14,
     fontWeight: '800',
   },
   avatarPicker: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
@@ -464,8 +557,8 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(124,184,255,0.25)',
-    backgroundColor: 'rgba(124,184,255,0.08)',
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.accentSoft,
     paddingVertical: 8,
     paddingHorizontal: 8,
     alignItems: 'center',
@@ -486,13 +579,13 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   avatarChipName: {
-    color: '#c9d6ee',
+    color: colors.accent,
     fontSize: 11,
     fontWeight: '700',
     textAlign: 'center',
   },
   avatarChipNameSelected: {
-    color: '#ffd98a',
+    color: colors.gold,
   },
   avatarChipNameLocked: {
     color: 'rgba(201,214,238,0.7)',
@@ -501,101 +594,6 @@ const styles = StyleSheet.create({
     color: 'rgba(201,214,238,0.65)',
     fontSize: 9,
     textAlign: 'center',
-  },
-  statsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-  },
-  statChip: {
-    flex: 1,
-    minWidth: 90,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    backgroundColor: 'rgba(124,184,255,0.08)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(124,184,255,0.2)',
-    alignItems: 'center',
-    gap: 2,
-  },
-  statChipWide: {
-    minWidth: '100%',
-  },
-  statValue: {
-    color: '#F4F7FA',
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  statValueSmall: {
-    color: '#F4F7FA',
-    fontSize: 14,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  statLabel: {
-    color: 'rgba(201,214,238,0.55)',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  achievementsSection: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    gap: 8,
-  },
-  achievementsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-  },
-  achievementsTitle: {
-    color: 'rgba(201,214,238,0.75)',
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-  achievementsCount: {
-    color: 'rgba(201,214,238,0.45)',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  achievementsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  achievementChip: {
-    width: '31%',
-    minWidth: 96,
-    flexGrow: 1,
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 6,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,200,80,0.1)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,200,80,0.35)',
-    gap: 4,
-  },
-  achievementLocked: {
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderColor: 'rgba(255,255,255,0.1)',
-    opacity: 0.55,
-  },
-  achievementEmoji: {
-    fontSize: 22,
-  },
-  achievementLabel: {
-    color: '#ffd98a',
-    fontSize: 10,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  achievementLabelLocked: {
-    color: 'rgba(201,214,238,0.45)',
   },
   tools: {
     paddingHorizontal: 16,
@@ -609,7 +607,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    color: '#F4F7FA',
+    color: colors.text,
     fontSize: 15,
   },
   sortBtn: {
@@ -617,12 +615,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: 'rgba(124,184,255,0.12)',
+    backgroundColor: colors.accentSoft,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(124,184,255,0.3)',
+    borderColor: colors.borderStrong,
   },
   sortBtnLabel: {
-    color: '#c9d6ee',
+    color: colors.accent,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -638,7 +636,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   emptyTitle: {
-    color: '#F4F7FA',
+    color: colors.text,
     fontSize: 17,
     fontWeight: '800',
     textAlign: 'center',
@@ -676,7 +674,7 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 10,
-    backgroundColor: '#1a1a22',
+    backgroundColor: colors.bgElevated,
   },
   cardBody: {
     flex: 1,
@@ -684,7 +682,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   cardBreed: {
-    color: '#F4F7FA',
+    color: colors.text,
     fontSize: 16,
     fontWeight: '800',
   },

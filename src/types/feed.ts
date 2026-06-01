@@ -17,4 +17,6 @@ export type FeedPost = {
   imageUri: string | null;
   createdAt: string;
   isMine: boolean;
+  likeCount: number;
+  likedByMe: boolean;
 };
