@@ -64,6 +64,9 @@ export const en: TranslationTree = {
     captureFailed: 'Capture failed. Please try again.',
     mountError: 'Camera error',
     shutter: 'Shutter',
+    simulatorHint:
+      'The camera preview is not available in the simulator. Use a physical device, or pick a photo below.',
+    simulatorPick: 'Choose photo',
   },
   feed: {
     title: 'Poppo Feed',

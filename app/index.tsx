@@ -3,7 +3,7 @@ import { hasCompletedOnboarding } from '@/services/onboardingService';
 import { colors } from '@/theme/tokens';
 import { Redirect } from 'expo-router';
 import * as React from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 type GateHref = '/onboarding' | '/auth' | '/camera';
 
@@ -29,6 +29,7 @@ export default function IndexGate() {
     return (
       <View style={styles.boot}>
         <ActivityIndicator size="large" color={colors.accent} />
+        <Text style={styles.bootText}>ぽっぽを読み込み中…</Text>
       </View>
     );
   }
@@ -42,5 +43,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 16,
+  },
+  bootText: {
+    color: colors.textMuted,
+    fontSize: 15,
   },
 });

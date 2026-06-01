@@ -1,5 +1,10 @@
 import Constants from 'expo-constants';
 
+/** iOS/Android シミュレータ（実機ではない） */
+export function isSimulator(): boolean {
+  return !Constants.isDevice;
+}
+
 /** Expo Go で動いているか（ネイティブモジュール未同梱） */
 export function isExpoGo(): boolean {
   return Constants.appOwnership === 'expo';

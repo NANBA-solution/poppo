@@ -2,11 +2,13 @@ import { FloatingPill } from '@/components/ui/FloatingPill';
 import { useI18n } from '@/i18n/I18nProvider';
 import { getPigeonCount } from '@/services/collectionService';
 import { colors } from '@/theme/tokens';
+import { isSimulator } from '@/utils/runtime';
 import { hapticLight } from '@/utils/haptics';
 import { playPigeonShutter } from '@/utils/pigeonSound';
 import type { IconName } from '@/components/icons/AppIcon';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import type { FlashMode } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as React from 'react';
 import {
@@ -42,6 +44,12 @@ export default function CameraScreen() {
   const [flash, setFlash] = React.useState<FlashMode>('off');
   const [screenFocused, setScreenFocused] = React.useState(false);
   const [permissionSlow, setPermissionSlow] = React.useState(false);
+  const simulator = isSimulator();
+
+  React.useEffect(() => {
+    if (!simulator || !permission?.granted) return;
+    setReady(true);
+  }, [simulator, permission?.granted]);
 
   React.useEffect(() => {
     if (permission != null) {
@@ -126,8 +134,46 @@ export default function CameraScreen() {
     });
   }, []);
 
+  const pickFromLibrary = React.useCallback(async () => {
+    try {
+      setCapturing(true);
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(t.camera.permissionTitle, t.camera.permissionBody);
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.92,
+      });
+      if (result.canceled || !result.assets[0]?.uri) return;
+      void hapticLight();
+      router.push({
+        pathname: '/result',
+        params: { uri: encodeURIComponent(result.assets[0].uri) },
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : t.camera.captureFailed;
+      Alert.alert(t.camera.captureError, msg);
+    } finally {
+      setCapturing(false);
+    }
+  }, [
+    router,
+    t.camera.captureError,
+    t.camera.captureFailed,
+    t.camera.permissionBody,
+    t.camera.permissionTitle,
+  ]);
+
   const onShutter = React.useCallback(async () => {
     if (!ready || capturing) return;
+
+    if (simulator) {
+      await pickFromLibrary();
+      return;
+    }
+
     const cam = cameraRef.current;
     if (!cam) return;
 
@@ -146,7 +192,15 @@ export default function CameraScreen() {
     } finally {
       setCapturing(false);
     }
-  }, [capturing, ready, router, t.camera.captureError, t.camera.captureFailed]);
+  }, [
+    capturing,
+    pickFromLibrary,
+    ready,
+    router,
+    simulator,
+    t.camera.captureError,
+    t.camera.captureFailed,
+  ]);
 
   if (!permission) {
     return (
@@ -211,6 +265,15 @@ export default function CameraScreen() {
           <Text style={styles.overlayText}>{t.camera.preparing}</Text>
         </View>
       )}
+
+      {simulator && ready ? (
+        <View style={[styles.simulatorBanner, { top: insets.top + 72 }]} pointerEvents="box-none">
+          <Text style={styles.simulatorBannerText}>{t.camera.simulatorHint}</Text>
+          <Pressable style={styles.primaryBtn} onPress={pickFromLibrary} disabled={capturing}>
+            <Text style={styles.primaryBtnLabel}>{t.camera.simulatorPick}</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       <View style={[styles.topBar, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
         <FloatingPill
@@ -329,6 +392,23 @@ const styles = StyleSheet.create({
   overlayText: {
     color: colors.text,
     fontWeight: '600',
+  },
+  simulatorBanner: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: 'rgba(20,20,28,0.92)',
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    gap: 12,
+  },
+  simulatorBannerText: {
+    color: colors.textMuted,
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: 'center',
   },
   topBar: {
     position: 'absolute',

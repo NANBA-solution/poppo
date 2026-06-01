@@ -62,6 +62,8 @@ export const ja = {
     captureFailed: '撮影に失敗しました。もう一度お試しください。',
     mountError: 'カメラエラー',
     shutter: 'シャッター',
+    simulatorHint: 'シミュレータではカメラプレビューは使えません。実機で撮影するか、下のボタンで写真を選んでください。',
+    simulatorPick: '写真を選ぶ',
   },
   feed: {
     title: 'ぽっぽフィード',

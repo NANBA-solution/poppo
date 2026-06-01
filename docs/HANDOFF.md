@@ -19,19 +19,23 @@
 
 ## 起動・ビルド
 
-```bash
-# 開発（dev client 必須）
-npx expo start --dev-client --clear
+**シミュレータで詰まったら必読:** [`docs/IOS_SIMULATOR_START.md`](./IOS_SIMULATOR_START.md)（URL・Metro 二重起動・スプラッシュで止まる等の対処）
 
-# iOS 開発ビルド（ローカル推奨。App Store で Xcode が入らないときは `docs/LOCAL_IOS_BUILD.md`）
-# 要件: Xcode 16.1 以上（RN 0.81）
+```bash
+# シミュレータ（日常はこれ）
 export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+npm run build:dev:ios:sim      # ビルド＋起動。Metro は 127.0.0.1:8081
+# Metro だけ: npm run start:dev:sim → シミュレータで http://127.0.0.1:8081 をタップ
+
+# 実機
+npm run build:dev:ios          # USB 接続の iPhone を選択
+
+# 初回ネイティブ生成（App Store で Xcode が入らないときは `docs/LOCAL_IOS_BUILD.md`）
+# 要件: Xcode 16.1 以上（RN 0.81）
 npm run prebuild:ios           # 初回のみ（ios/ 生成）
 npm run pod:install
-npm run build:dev:ios          # 接続中の実機へインストール
-# npm run build:dev:ios:sim    # シミュレータ
 # ネイティブを壊したとき
-npm run prebuild:ios:clean && npm run pod:install && npm run build:dev:ios
+npm run prebuild:ios:clean && npm run pod:install && npm run build:dev:ios:sim
 ```
 
 - エントリ: `index.js` → `react-native-gesture-handler` → `expo-router/entry`

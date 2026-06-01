@@ -5,17 +5,21 @@ import { ensureSupabaseSession } from '@/services/authService';
 import { isSupabaseConfigured } from '@/lib/supabaseConfig';
 import { colors } from '@/theme/tokens';
 import { Stack } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as React from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+
+SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 function RootNavigator() {
   const [booting, setBooting] = React.useState(true);
 
   React.useEffect(() => {
     setBooting(false);
+    void SplashScreen.hideAsync();
   }, []);
 
   React.useEffect(() => {
@@ -28,6 +32,7 @@ function RootNavigator() {
     return (
       <View style={styles.boot}>
         <ActivityIndicator size="large" color={colors.accent} />
+        <Text style={styles.bootText}>起動中…</Text>
       </View>
     );
   }
@@ -61,5 +66,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 16,
+  },
+  bootText: {
+    color: colors.textMuted,
+    fontSize: 15,
   },
 });
