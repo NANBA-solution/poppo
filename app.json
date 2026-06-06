@@ -14,7 +14,15 @@
       "backgroundColor": "#F5F1EA"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": [
+          "instagram",
+          "instagram-stories",
+          "twitter",
+          "x"
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {

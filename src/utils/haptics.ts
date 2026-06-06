@@ -1,4 +1,5 @@
 import * as Haptics from 'expo-haptics';
+import { playPigeonNotification } from '@/utils/pigeonSound';
 
 export async function hapticLight(): Promise<void> {
   try {
@@ -9,6 +10,7 @@ export async function hapticLight(): Promise<void> {
 }
 
 export async function hapticSuccess(): Promise<void> {
+  void playPigeonNotification();
   try {
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   } catch {
@@ -17,6 +19,7 @@ export async function hapticSuccess(): Promise<void> {
 }
 
 export async function hapticWarning(): Promise<void> {
+  void playPigeonNotification();
   try {
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
   } catch {

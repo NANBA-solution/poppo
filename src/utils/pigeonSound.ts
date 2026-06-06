@@ -1,16 +1,18 @@
 import { requireOptionalNativeModule } from 'expo-modules-core';
 
+const PIGEON_COO = require('../../assets/sounds/pigeon-coo.mp3');
+
 let nativeAvUsable = requireOptionalNativeModule('ExponentAV') != null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let shutterSound: any = null;
+let cooSound: any = null;
 let loading: Promise<void> | null = null;
 
-async function ensureShutterSound() {
+async function ensureCooSound() {
   if (!nativeAvUsable) return null;
-  if (shutterSound) return shutterSound;
+  if (cooSound) return cooSound;
   if (loading) {
     await loading;
-    return shutterSound;
+    return cooSound;
   }
 
   loading = (async () => {
@@ -20,35 +22,61 @@ async function ensureShutterSound() {
         playsInSilentModeIOS: true,
         shouldDuckAndroid: true,
       });
-      const { sound } = await Audio.Sound.createAsync(
-        require('../../assets/sounds/pigeon-shutter.wav'),
-        { volume: 0.9 },
-      );
-      shutterSound = sound;
+      const { sound } = await Audio.Sound.createAsync(PIGEON_COO, { volume: 0.95 });
+      cooSound = sound;
     } catch {
       nativeAvUsable = false;
-      shutterSound = null;
+      cooSound = null;
     }
   })();
 
   await loading;
   loading = null;
-  return shutterSound;
+  return cooSound;
 }
 
-export function isPigeonShutterSoundAvailable(): boolean {
+export function isPigeonCooSoundAvailable(): boolean {
   return nativeAvUsable;
 }
 
-/** シャッター時のハトの鳴き声（失敗時は以降スキップ） */
-export async function playPigeonShutter(): Promise<void> {
+/** @deprecated use isPigeonCooSoundAvailable */
+export function isPigeonShutterSoundAvailable(): boolean {
+  return isPigeonCooSoundAvailable();
+}
+
+/** 先読み（シャッター・通知の初回遅延を抑える） */
+export function preloadPigeonCoo(): void {
+  void ensureCooSound();
+}
+
+/** @deprecated use preloadPigeonCoo */
+export function preloadPigeonShutter(): void {
+  preloadPigeonCoo();
+}
+
+async function playCoo(): Promise<void> {
   if (!nativeAvUsable) return;
   try {
-    const sound = await ensureShutterSound();
+    const sound = await ensureCooSound();
     if (!sound) return;
     await sound.setPositionAsync(0);
     await sound.playAsync();
   } catch {
     nativeAvUsable = false;
   }
+}
+
+/** シャッター時のハトの鳴き声 */
+export async function playPigeonShutter(): Promise<void> {
+  await playCoo();
+}
+
+/** 通知フィードバック用（スキャン成功・警告など） */
+export async function playPigeonNotification(): Promise<void> {
+  await playCoo();
+}
+
+/** タブ・ナビ pill 押下時 */
+export async function playPigeonTab(): Promise<void> {
+  await playCoo();
 }

@@ -1,14 +1,15 @@
+import { ScanDetectOverlay } from '@/components/ScanDetectOverlay';
 import { ScanResultCard } from '@/components/ScanResultCard';
 import { useI18n } from '@/i18n/I18nProvider';
-import type { PigeonScanJson } from '@/types/scan';
 import { borders, colors } from '@/theme/tokens';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as React from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 
 type ShareCaptureFrameProps = {
   imageUri: string;
   phase: 'loading' | 'success' | 'error';
-  result?: PigeonScanJson | null;
+  headline?: string;
   error?: string | null;
   errorTitle?: string;
   subtitle?: string;
@@ -20,13 +21,31 @@ type ShareCaptureFrameProps = {
 export function ShareCaptureFrame({
   imageUri,
   phase,
-  result,
+  headline,
   error,
   errorTitle,
   subtitle,
   minimal = false,
 }: ShareCaptureFrameProps) {
   const { t } = useI18n();
+  const [fxVisible, setFxVisible] = React.useState(phase === 'loading');
+
+  React.useEffect(() => {
+    if (phase === 'loading') {
+      setFxVisible(true);
+      return;
+    }
+    if (phase === 'success') {
+      setFxVisible(true);
+      const timer = setTimeout(() => setFxVisible(false), 1400);
+      return () => clearTimeout(timer);
+    }
+    if (phase === 'error') {
+      setFxVisible(true);
+      return;
+    }
+    setFxVisible(false);
+  }, [phase]);
 
   return (
     <View style={styles.root} collapsable={false}>
@@ -36,9 +55,26 @@ export function ShareCaptureFrame({
         resizeMode="cover"
         accessibilityLabel="スキャンしたハトの写真"
       />
-      <View style={styles.dimOverlay} pointerEvents="none" />
+      <View
+        style={[
+          styles.dimOverlay,
+          phase === 'loading' && styles.dimOverlayScanning,
+          phase === 'success' && fxVisible && styles.dimOverlaySuccess,
+          phase === 'error' && styles.dimOverlayError,
+        ]}
+        pointerEvents="none"
+      />
 
-      {minimal && (
+      {fxVisible ? (
+        <ScanDetectOverlay
+          phase={phase}
+          label={t.scan.recognizing}
+          errorTitle={errorTitle ?? t.scan.errorTitle}
+          errorBody={error ?? undefined}
+        />
+      ) : null}
+
+      {minimal && phase !== 'loading' && (
         <LinearGradient
           colors={['transparent', 'rgba(26,26,26,0.35)', colors.paper]}
           locations={[0, 0.45, 1]}
@@ -47,19 +83,21 @@ export function ShareCaptureFrame({
         />
       )}
 
-      <View
-        style={[styles.cardOverlay, minimal && styles.cardOverlayMinimal]}
-        pointerEvents="none"
-      >
-        <ScanResultCard
-          phase={phase}
-          breed={result?.breed}
-          error={error}
-          errorTitle={errorTitle}
-          subtitle={subtitle}
-          showEyebrow={!minimal}
-        />
-      </View>
+      {phase === 'success' && (
+        <View
+          style={[styles.cardOverlay, minimal && styles.cardOverlayMinimal]}
+          pointerEvents="none"
+        >
+          <ScanResultCard
+            phase={phase}
+            headline={headline}
+            error={error}
+            errorTitle={errorTitle}
+            subtitle={subtitle}
+            showEyebrow={!minimal}
+          />
+        </View>
+      )}
 
       {!minimal && (
         <View style={styles.brandBar} pointerEvents="none">
@@ -87,6 +125,15 @@ const styles = StyleSheet.create({
   dimOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.12)',
+  },
+  dimOverlayScanning: {
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  dimOverlaySuccess: {
+    backgroundColor: 'rgba(45,106,79,0.12)',
+  },
+  dimOverlayError: {
+    backgroundColor: 'rgba(180,35,24,0.18)',
   },
   bottomScrim: {
     position: 'absolute',

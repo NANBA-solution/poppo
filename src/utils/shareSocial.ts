@@ -8,6 +8,7 @@ import * as Sharing from 'expo-sharing';
 import { Alert, Platform, type View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 
+import type { AppLocale } from '@/services/localeService';
 import { buildShareCaption } from '@/utils/sharePigeon';
 import { isExpoGo } from '@/utils/runtime';
 
@@ -34,8 +35,8 @@ export async function captureShareImage(ref: View): Promise<string> {
   });
 }
 
-async function copyCaption(breed: string): Promise<void> {
-  await Clipboard.setStringAsync(buildShareCaption(breed));
+async function copyCaption(scanNo: number, locale: AppLocale = 'ja'): Promise<void> {
+  await Clipboard.setStringAsync(buildShareCaption(scanNo, locale));
 }
 
 async function openShareSheet(fileUri: string, dialogTitle: string): Promise<boolean> {
@@ -118,13 +119,17 @@ async function shareXNative(image: string, caption: string): Promise<boolean> {
 }
 
 /** Instagram ストーリーへ共有 */
-export async function shareToInstagramStory(fileUri: string, breed: string): Promise<void> {
+export async function shareToInstagramStory(
+  fileUri: string,
+  scanNo: number,
+  locale: AppLocale = 'ja',
+): Promise<void> {
   if (Platform.OS === 'web') {
     throw new Error('Web では Instagram ストーリー共有に対応していません。');
   }
 
   const image = normalizeFileUri(fileUri);
-  await copyCaption(breed);
+  await copyCaption(scanNo, locale);
 
   const hasInstagram = await isInstagramInstalled();
   if (!hasInstagram) {
@@ -192,16 +197,20 @@ export async function shareToInstagramStory(fileUri: string, breed: string): Pro
 }
 
 /** X（Twitter）へ投稿 */
-export async function shareToX(fileUri: string, breed: string): Promise<void> {
+export async function shareToX(
+  fileUri: string,
+  scanNo: number,
+  locale: AppLocale = 'ja',
+): Promise<void> {
   if (Platform.OS === 'web') {
-    const text = encodeURIComponent(buildShareCaption(breed));
+    const text = encodeURIComponent(buildShareCaption(scanNo, locale));
     await Linking.openURL(`https://x.com/intent/tweet?text=${text}`);
     return;
   }
 
-  const caption = buildShareCaption(breed);
+  const caption = buildShareCaption(scanNo, locale);
   const image = normalizeFileUri(fileUri);
-  await copyCaption(breed);
+  await copyCaption(scanNo, locale);
 
   // 本番ビルド: X アプリ直共有
   if (await shareXNative(image, caption)) {

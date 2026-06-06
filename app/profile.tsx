@@ -1,4 +1,4 @@
-import { getPigeonCollection, computeCollectionStats } from '@/services/collectionService';
+import { getPigeonCollection } from '@/services/collectionService';
 import { AppIcon } from '@/components/icons/AppIcon';
 import { Screen } from '@/components/ui/Screen';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
@@ -10,7 +10,8 @@ import { getPlayerTitle } from '@/services/titleService';
 import { getDexCompletion } from '@/services/dexService';
 import type { PigeonEntry } from '@/types/collection';
 import { hapticLight } from '@/utils/haptics';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useTabRouter } from '@/hooks/useTabRouter';
+import { useFocusEffect } from 'expo-router';
 import * as React from 'react';
 import {
   ActivityIndicator,
@@ -20,33 +21,19 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-type SortMode = 'newest' | 'oldest' | 'breed';
+type SortMode = 'newest' | 'oldest';
 
-function filterAndSort(
-  entries: PigeonEntry[],
-  query: string,
-  sort: SortMode,
-): PigeonEntry[] {
-  const q = query.trim().toLowerCase();
-  let list = q
-    ? entries.filter((entry) => entry.breed.toLowerCase().includes(q))
-    : [...entries];
-
-  if (sort === 'oldest') {
-    list = [...list].reverse();
-  } else if (sort === 'breed') {
-    list = [...list].sort((a, b) => a.breed.localeCompare(b.breed, 'ja'));
-  }
-  return list;
+function sortEntries(entries: PigeonEntry[], sort: SortMode): PigeonEntry[] {
+  if (sort === 'oldest') return [...entries].reverse();
+  return [...entries];
 }
 
 export default function ProfileScreen() {
-  const router = useRouter();
+  const router = useTabRouter();
   const insets = useSafeAreaInsets();
   const { t, locale } = useI18n();
 
@@ -54,14 +41,12 @@ export default function ProfileScreen() {
     () => ({
       newest: t.profile.sortNewest,
       oldest: t.profile.sortOldest,
-      breed: t.profile.sortBreed,
     }),
-    [t.profile.sortBreed, t.profile.sortNewest, t.profile.sortOldest],
+    [t.profile.sortNewest, t.profile.sortOldest],
   );
   const [entries, setEntries] = React.useState<PigeonEntry[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
-  const [query, setQuery] = React.useState('');
   const [sort, setSort] = React.useState<SortMode>('newest');
 
   const loadEntries = React.useCallback(async (isRefresh = false) => {
@@ -82,18 +67,17 @@ export default function ProfileScreen() {
   const cycleSort = React.useCallback(() => {
     void hapticLight();
     setSort((current) => {
-      const modes: SortMode[] = ['newest', 'oldest', 'breed'];
+      const modes: SortMode[] = ['newest', 'oldest'];
       const idx = modes.indexOf(current);
       return modes[(idx + 1) % modes.length];
     });
   }, []);
 
-  const stats = React.useMemo(() => computeCollectionStats(entries), [entries]);
   const dexCompletion = React.useMemo(() => getDexCompletion(entries), [entries]);
   const playerTitle = getPlayerTitle(entries.length, t);
   const visibleEntries = React.useMemo(
-    () => filterAndSort(entries, query, sort),
-    [entries, query, sort],
+    () => sortEntries(entries, sort),
+    [entries, sort],
   );
   const listHeader = (
     <>
@@ -114,29 +98,29 @@ export default function ProfileScreen() {
 
       <View style={styles.statsRow}>
         <View style={styles.statChip}>
-          <Text style={styles.statValue}>{stats.total}</Text>
+          <Text style={styles.statValue}>{entries.length}</Text>
           <Text style={styles.statLabel}>{t.profile.totalScans}</Text>
         </View>
         <View style={styles.statChip}>
-          <Text style={styles.statValue}>{stats.uniqueBreeds}</Text>
-          <Text style={styles.statLabel}>{t.profile.breedCount}</Text>
+          <Text style={styles.statValue}>
+            {dexCompletion.current}/{dexCompletion.goal}
+          </Text>
+          <Text style={styles.statLabel}>{t.profile.collectionGoal}</Text>
         </View>
         <View style={styles.statChip}>
-          <Text style={styles.statValue}>
-            {dexCompletion.discovered}/{dexCompletion.goal}
-          </Text>
-          <Text style={styles.statLabel}>{t.profile.dex}</Text>
+          <Text style={styles.statValue}>{dexCompletion.percent}%</Text>
+          <Text style={styles.statLabel}>{t.profile.collectionProgress}</Text>
         </View>
       </View>
 
       <View style={styles.quickNav}>
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.push('/dex')}
+          onPress={() => router.push('/collection')}
           style={({ pressed }) => [styles.quickNavBtn, pressed && styles.pressed]}
         >
           <AppIcon name="book" size={18} color={colors.accent} />
-          <Text style={styles.quickNavLabel}>{t.profile.dex}</Text>
+          <Text style={styles.quickNavLabel}>{t.profile.collectionNav}</Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -150,15 +134,6 @@ export default function ProfileScreen() {
 
       {entries.length > 0 && (
         <View style={styles.tools}>
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder={t.profile.searchPlaceholder}
-            placeholderTextColor={colors.textMuted}
-            style={styles.searchInput}
-            clearButtonMode="while-editing"
-            accessibilityLabel={t.profile.searchPlaceholder}
-          />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`${sortLabels[sort]}`}
@@ -215,11 +190,6 @@ export default function ProfileScreen() {
           data={visibleEntries}
           keyExtractor={(item) => item.id}
           ListHeaderComponent={listHeader}
-          ListEmptyComponent={
-            <Text style={styles.noMatch}>
-              {formatMessage(t.profile.noMatch, { query })}
-            </Text>
-          }
           contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) }}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
           style={styles.list}
@@ -230,16 +200,20 @@ export default function ProfileScreen() {
               tintColor={colors.accent}
             />
           }
-          renderItem={({ item }) => (
+          renderItem={({ item, index }) => (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={item.breed}
+              accessibilityLabel={formatMessage(t.profile.scanEntry, {
+                n: visibleEntries.length - index,
+              })}
               onPress={() => router.push({ pathname: '/entry/[id]', params: { id: item.id } })}
               style={({ pressed }) => [styles.card, pressed && styles.pressed]}
             >
               <Image source={{ uri: item.imageUri }} style={styles.thumb} />
               <View style={styles.cardBody}>
-                <Text style={styles.cardBreed}>{item.breed}</Text>
+                <Text style={styles.cardBreed}>
+                  {formatMessage(t.profile.scanEntry, { n: visibleEntries.length - index })}
+                </Text>
                 <Text style={styles.cardDate}>
                   {formatShortDateTime(item.scannedAt, locale)}
                 </Text>
@@ -371,16 +345,6 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     gap: 8,
   },
-  searchInput: {
-    backgroundColor: colors.surfaceSolid,
-    borderWidth: borders.thin,
-    borderColor: colors.border,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: colors.text,
-    fontSize: 15,
-  },
   sortBtn: {
     alignSelf: 'flex-start',
     paddingHorizontal: 12,
@@ -433,13 +397,6 @@ const styles = StyleSheet.create({
     color: colors.onAccent,
     fontSize: 15,
     fontWeight: '800',
-  },
-  noMatch: {
-    color: colors.textMuted,
-    fontSize: 14,
-    textAlign: 'center',
-    paddingVertical: 24,
-    paddingHorizontal: 16,
   },
   list: {
     paddingHorizontal: 16,

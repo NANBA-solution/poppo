@@ -9,7 +9,7 @@ import { resetOnboardingFlow } from '@/services/onboardingService';
 import { borders, colors } from '@/theme/tokens';
 import { hapticWarning } from '@/utils/haptics';
 import Constants from 'expo-constants';
-import { useRouter } from 'expo-router';
+import { useTabRouter } from '@/hooks/useTabRouter';
 import * as React from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -60,7 +60,7 @@ function SettingsRow({
 }
 
 export default function SettingsScreen() {
-  const router = useRouter();
+  const router = useTabRouter();
   const { t } = useI18n();
   const [clearing, setClearing] = React.useState(false);
 

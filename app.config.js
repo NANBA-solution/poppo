@@ -44,6 +44,13 @@ module.exports = {
     },
     plugins: [
       ...(require('./app.json').expo.plugins ?? []),
+      [
+        'expo-notifications',
+        {
+          icon: './assets/brand-icon.png',
+          color: '#F5F1EA',
+        },
+      ],
       'expo-dev-client',
       'expo-apple-authentication',
       [

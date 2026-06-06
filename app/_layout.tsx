@@ -1,5 +1,6 @@
 import 'react-native-gesture-handler';
 
+import { DailyNotificationBootstrap } from '@/components/DailyNotificationBootstrap';
 import { I18nProvider } from '@/i18n/I18nProvider';
 import { colors } from '@/theme/tokens';
 import { Stack } from 'expo-router';
@@ -45,6 +46,7 @@ export default function RootLayout() {
       <I18nProvider>
         <SafeAreaProvider>
           <StatusBar style="dark" />
+          <DailyNotificationBootstrap />
           <RootNavigator />
         </SafeAreaProvider>
       </I18nProvider>

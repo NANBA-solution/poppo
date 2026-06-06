@@ -5,7 +5,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 type ScanResultCardProps = {
   phase: 'loading' | 'success' | 'error';
-  breed?: string;
+  headline?: string;
   error?: string | null;
   errorTitle?: string;
   subtitle?: string;
@@ -14,7 +14,7 @@ type ScanResultCardProps = {
 
 export function ScanResultCard({
   phase,
-  breed,
+  headline,
   error,
   errorTitle,
   subtitle,
@@ -35,8 +35,8 @@ export function ScanResultCard({
     return (
       <View style={styles.card}>
         {showEyebrow ? <Text style={styles.cardEyebrow}>{t.scan.eyebrow}</Text> : null}
-        {breed ? <Text style={styles.cardBreed}>{breed}</Text> : null}
-        <Text style={breed ? styles.cardSubtitle : styles.cardBreed}>
+        {headline ? <Text style={styles.cardHeadline}>{headline}</Text> : null}
+        <Text style={headline ? styles.cardSubtitle : styles.cardHeadline}>
           {subtitle ?? t.scan.saved}
         </Text>
       </View>
@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 3,
   },
-  cardBreed: {
+  cardHeadline: {
     color: colors.text,
     fontSize: 22,
     fontWeight: '900',

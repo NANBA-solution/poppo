@@ -1,14 +1,23 @@
 import { ShareCaptureFrame } from '@/components/ShareCaptureFrame';
+import { SocialShareButtons } from '@/components/SocialShareButtons';
 import { ActionFooter, FooterButton } from '@/components/ui/ActionFooter';
 import { Screen } from '@/components/ui/Screen';
+import { formatMessage } from '@/i18n/format';
 import { useI18n } from '@/i18n/I18nProvider';
+import {
+  getPigeonCollection,
+  getPigeonCount,
+  savePigeonScan,
+} from '@/services/collectionService';
+import { detectNewQuests, getQuestTitle } from '@/services/questService';
 import { recognizePigeonLocally } from '@/services/pigeonDetectService';
 import { isNotPigeonError } from '@/types/scan';
-import { savePigeonScan } from '@/services/collectionService';
 import { colors } from '@/theme/tokens';
 import { hapticSuccess, hapticWarning } from '@/utils/haptics';
+import { playQuestComplete, preloadQuestComplete } from '@/utils/questSound';
 import { sharePigeonImageWithFallback } from '@/utils/sharePigeon';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useTabRouter } from '@/hooks/useTabRouter';
+import { useLocalSearchParams } from 'expo-router';
 import * as React from 'react';
 import {
   Alert,
@@ -34,20 +43,32 @@ function resolveUri(raw: string | string[] | undefined): string | undefined {
 }
 
 export default function ResultScreen() {
-  const router = useRouter();
+  const router = useTabRouter();
   const insets = useSafeAreaInsets();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { uri: uriParam } = useLocalSearchParams<{ uri?: string | string[] }>();
   const imageUri = resolveUri(uriParam);
 
   const shareRef = React.useRef<View>(null);
   const [shareBusy, setShareBusy] = React.useState(false);
+  const [socialBusy, setSocialBusy] = React.useState(false);
   const [phase, setPhase] = React.useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [saveError, setSaveError] = React.useState<string | null>(null);
   const [errorTitle, setErrorTitle] = React.useState<string | undefined>();
   const [notPigeon, setNotPigeon] = React.useState(false);
   const [savedEntryId, setSavedEntryId] = React.useState<string | null>(null);
+  const [scanNo, setScanNo] = React.useState<number | null>(null);
+  const [displayUri, setDisplayUri] = React.useState<string | undefined>(imageUri);
   const [retryKey, setRetryKey] = React.useState(0);
+  const [newQuestTitles, setNewQuestTitles] = React.useState<string[]>([]);
+
+  React.useEffect(() => {
+    preloadQuestComplete();
+  }, []);
+
+  React.useEffect(() => {
+    setDisplayUri(imageUri);
+  }, [imageUri]);
 
   React.useEffect(() => {
     if (!imageUri) {
@@ -56,6 +77,8 @@ export default function ResultScreen() {
       setErrorTitle(undefined);
       setNotPigeon(false);
       setSavedEntryId(null);
+      setScanNo(null);
+      setNewQuestTitles([]);
       return;
     }
 
@@ -67,16 +90,29 @@ export default function ResultScreen() {
       setErrorTitle(undefined);
       setNotPigeon(false);
       setSavedEntryId(null);
+      setScanNo(null);
+      setNewQuestTitles([]);
       try {
         await recognizePigeonLocally(imageUri);
+        const before = await getPigeonCollection();
         const entry = await savePigeonScan(imageUri, {
           isPigeon: true,
           breed: PENDING_BREED,
         });
         if (!cancelled) {
+          const after = await getPigeonCollection();
+          const newQuestIds = detectNewQuests(before, after, t);
+          const questTitles = newQuestIds.map((id) => getQuestTitle(id, t));
+          const total = await getPigeonCount();
           setSavedEntryId(entry.id);
+          setScanNo(total);
+          setDisplayUri(entry.imageUri);
+          setNewQuestTitles(questTitles);
           setPhase('success');
           void hapticSuccess();
+          if (newQuestIds.length > 0) {
+            void playQuestComplete();
+          }
         }
       } catch (e) {
         if (!cancelled) {
@@ -107,7 +143,7 @@ export default function ResultScreen() {
   }, []);
 
   const handleShare = React.useCallback(async () => {
-    if (!shareRef.current || !imageUri || shareBusy || phase !== 'success') return;
+    if (!shareRef.current || !displayUri || shareBusy || phase !== 'success') return;
     try {
       setShareBusy(true);
       const fileUri = await captureRef(shareRef, {
@@ -115,7 +151,8 @@ export default function ResultScreen() {
         quality: 0.92,
         result: 'tmpfile',
       });
-      await sharePigeonImageWithFallback(fileUri, 'ぽっぽ');
+      if (scanNo == null) return;
+      await sharePigeonImageWithFallback(fileUri, scanNo, { locale });
     } catch (e) {
       Alert.alert(
         t.common.shareError,
@@ -124,18 +161,23 @@ export default function ResultScreen() {
     } finally {
       setShareBusy(false);
     }
-  }, [imageUri, phase, shareBusy, t.common.shareError, t.common.shareFailed]);
+  }, [displayUri, locale, phase, scanNo, shareBusy, t.common.shareError, t.common.shareFailed]);
 
   const cardPhase = phase === 'idle' ? 'loading' : phase;
 
   return (
     <Screen edges={false} pigeons={false}>
       <View style={[styles.stage, { paddingTop: insets.top }]}>
-        {imageUri ? (
+        {displayUri ? (
           <View ref={shareRef} style={styles.shareWrap} collapsable={false}>
             <ShareCaptureFrame
-              imageUri={imageUri}
+              imageUri={displayUri}
               phase={cardPhase}
+              headline={
+                phase === 'success' && scanNo != null
+                  ? formatMessage(t.profile.scanEntry, { n: scanNo })
+                  : undefined
+              }
               error={saveError}
               errorTitle={errorTitle}
               subtitle={phase === 'success' ? t.scan.saved : undefined}
@@ -148,6 +190,15 @@ export default function ResultScreen() {
       </View>
 
       <ActionFooter>
+        {phase === 'success' && newQuestTitles.length > 0 && (
+          <View style={styles.questBanner}>
+            {newQuestTitles.map((title) => (
+              <Text key={title} style={styles.questBannerText}>
+                {formatMessage(t.scan.quest, { title })}
+              </Text>
+            ))}
+          </View>
+        )}
         {phase === 'success' && savedEntryId && (
           <Pressable
             accessibilityRole="button"
@@ -161,12 +212,20 @@ export default function ResultScreen() {
             </Text>
           </Pressable>
         )}
+        {phase === 'success' && scanNo != null ? (
+          <SocialShareButtons
+            shareRef={shareRef}
+            scanNo={scanNo}
+            disabled={!displayUri || shareBusy}
+            onBusyChange={setSocialBusy}
+          />
+        ) : null}
         <View style={styles.footerRow}>
           {phase === 'success' ? (
             <FooterButton
               label={t.common.share}
               onPress={handleShare}
-              disabled={!imageUri || shareBusy}
+              disabled={!displayUri || shareBusy || socialBusy}
               loading={shareBusy}
             />
           ) : null}
@@ -202,6 +261,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 16,
     padding: 24,
+  },
+  questBanner: {
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+  },
+  questBannerText: {
+    color: colors.accent,
+    fontSize: 13,
+    fontWeight: '800',
+    textAlign: 'center',
   },
   savedLink: {
     alignItems: 'center',

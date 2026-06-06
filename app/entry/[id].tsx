@@ -1,14 +1,22 @@
 import { ShareCaptureFrame } from '@/components/ShareCaptureFrame';
+import { SocialShareButtons } from '@/components/SocialShareButtons';
 import { ActionFooter, FooterButton } from '@/components/ui/ActionFooter';
 import { Screen } from '@/components/ui/Screen';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
+import { formatMessage } from '@/i18n/format';
 import { useI18n } from '@/i18n/I18nProvider';
-import { deletePigeonScan, getPigeonById } from '@/services/collectionService';
+import {
+  deletePigeonScan,
+  getPigeonById,
+  getPigeonCollection,
+  getScanNumber,
+} from '@/services/collectionService';
 import type { PigeonEntry } from '@/types/collection';
 import { colors } from '@/theme/tokens';
 import { formatDateTime } from '@/utils/formatDate';
 import { sharePigeonImageWithFallback } from '@/utils/sharePigeon';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useTabRouter } from '@/hooks/useTabRouter';
+import { useLocalSearchParams } from 'expo-router';
 import * as React from 'react';
 import {
   ActivityIndicator,
@@ -21,7 +29,7 @@ import { captureRef } from 'react-native-view-shot';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function EntryDetailScreen() {
-  const router = useRouter();
+  const router = useTabRouter();
   const insets = useSafeAreaInsets();
   const { t, locale } = useI18n();
   const { id } = useLocalSearchParams<{ id?: string | string[] }>();
@@ -29,13 +37,16 @@ export default function EntryDetailScreen() {
 
   const shareRef = React.useRef<View>(null);
   const [entry, setEntry] = React.useState<PigeonEntry | null>(null);
+  const [scanNo, setScanNo] = React.useState<number | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [shareBusy, setShareBusy] = React.useState(false);
+  const [socialBusy, setSocialBusy] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
 
   React.useEffect(() => {
     if (!entryId) {
       setEntry(null);
+      setScanNo(null);
       setLoading(false);
       return;
     }
@@ -43,9 +54,13 @@ export default function EntryDetailScreen() {
     let active = true;
     (async () => {
       setLoading(true);
-      const data = await getPigeonById(entryId);
+      const [data, collection] = await Promise.all([
+        getPigeonById(entryId),
+        getPigeonCollection(),
+      ]);
       if (active) {
         setEntry(data);
+        setScanNo(data ? getScanNumber(collection, data.id) : null);
         setLoading(false);
       }
     })();
@@ -56,7 +71,7 @@ export default function EntryDetailScreen() {
   }, [entryId]);
 
   const handleShare = React.useCallback(async () => {
-    if (!shareRef.current || !entry || shareBusy) return;
+    if (!shareRef.current || !entry || scanNo == null || shareBusy) return;
     try {
       setShareBusy(true);
       const fileUri = await captureRef(shareRef, {
@@ -64,7 +79,7 @@ export default function EntryDetailScreen() {
         quality: 0.92,
         result: 'tmpfile',
       });
-      await sharePigeonImageWithFallback(fileUri, entry.breed);
+      await sharePigeonImageWithFallback(fileUri, scanNo, { locale });
     } catch (e) {
       Alert.alert(
         t.common.shareError,
@@ -73,7 +88,7 @@ export default function EntryDetailScreen() {
     } finally {
       setShareBusy(false);
     }
-  }, [entry, shareBusy, t.common.shareError, t.common.shareFailed]);
+  }, [entry, locale, scanNo, shareBusy, t.common.shareError, t.common.shareFailed]);
 
   const handleDelete = React.useCallback(() => {
     if (!entry || deleting) return;
@@ -122,7 +137,11 @@ export default function EntryDetailScreen() {
               <ShareCaptureFrame
                 imageUri={entry.imageUri}
                 phase="success"
-                result={{ isPigeon: true, breed: entry.breed }}
+                headline={
+                  scanNo != null
+                    ? formatMessage(t.profile.scanEntry, { n: scanNo })
+                    : undefined
+                }
                 subtitle={formatDateTime(entry.scannedAt, locale)}
                 minimal
               />
@@ -130,11 +149,19 @@ export default function EntryDetailScreen() {
           </View>
 
           <ActionFooter>
+            {scanNo != null ? (
+              <SocialShareButtons
+                shareRef={shareRef}
+                scanNo={scanNo}
+                disabled={shareBusy || deleting}
+                onBusyChange={setSocialBusy}
+              />
+            ) : null}
             <View style={styles.footerRow}>
               <FooterButton
                 label={t.common.share}
                 onPress={handleShare}
-                disabled={shareBusy || deleting}
+                disabled={shareBusy || socialBusy || deleting}
                 loading={shareBusy}
               />
               <FooterButton

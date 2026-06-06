@@ -2,6 +2,7 @@ import { useI18n } from '@/i18n/I18nProvider';
 import type { AppLocale } from '@/services/localeService';
 import { borders, colors, radii } from '@/theme/tokens';
 import { hapticLight } from '@/utils/haptics';
+import { playPigeonTab } from '@/utils/pigeonSound';
 import * as React from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -15,6 +16,7 @@ export function LanguagePills({ compact = false }: LanguagePillsProps) {
   const setLanguage = React.useCallback(
     (next: AppLocale) => {
       if (next === locale) return;
+      void playPigeonTab();
       void hapticLight();
       void setLocale(next);
     },

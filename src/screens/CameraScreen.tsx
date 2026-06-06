@@ -3,12 +3,13 @@ import { useI18n } from '@/i18n/I18nProvider';
 import { getPigeonCount } from '@/services/collectionService';
 import { colors } from '@/theme/tokens';
 import { hapticLight } from '@/utils/haptics';
-import { playPigeonShutter } from '@/utils/pigeonSound';
+import { useTabRouter } from '@/hooks/useTabRouter';
+import { playPigeonShutter, playPigeonTab, preloadPigeonShutter } from '@/utils/pigeonSound';
 import type { IconName } from '@/components/icons/AppIcon';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import type { FlashMode } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import * as React from 'react';
 import {
   ActivityIndicator,
@@ -33,7 +34,7 @@ function delay(ms: number) {
 }
 
 export default function CameraScreen() {
-  const router = useRouter();
+  const router = useTabRouter();
   const insets = useSafeAreaInsets();
   const { t } = useI18n();
   const [permission, requestPermission] = useCameraPermissions();
@@ -68,6 +69,7 @@ export default function CameraScreen() {
 
   useFocusEffect(
     React.useCallback(() => {
+      preloadPigeonShutter();
       let active = true;
       void getPigeonCount().then((count) => {
         if (active) setCollectionCount(count);
@@ -126,6 +128,7 @@ export default function CameraScreen() {
   );
 
   const cycleFlash = React.useCallback(() => {
+    void playPigeonTab();
     void hapticLight();
     setFlash((current) => {
       const idx = FLASH_CYCLE.indexOf(current);
@@ -337,8 +340,8 @@ export default function CameraScreen() {
           <FloatingPill
             icon="book"
             variant="paper"
-            label={t.profile.dex}
-            onPress={() => router.push('/dex')}
+            label={t.profile.collectionNav}
+            onPress={() => router.push('/collection')}
           />
           <FloatingPill
             icon="target"

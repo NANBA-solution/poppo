@@ -1,7 +1,7 @@
 import { AppIcon } from '@/components/icons/AppIcon';
 import { useI18n } from '@/i18n/I18nProvider';
 import { borders, colors, radii, shadow } from '@/theme/tokens';
-import { useRouter } from 'expo-router';
+import { useTabRouter } from '@/hooks/useTabRouter';
 import * as React from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -12,7 +12,7 @@ type ScreenHeaderProps = {
 };
 
 export function ScreenHeader({ title, right, showBack = true }: ScreenHeaderProps) {
-  const router = useRouter();
+  const router = useTabRouter();
   const { t } = useI18n();
 
   return (

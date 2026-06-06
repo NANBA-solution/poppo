@@ -7,17 +7,11 @@ import {
 import type { PigeonEntry } from '@/types/collection';
 import type { PigeonScanJson } from '@/types/scan';
 
-export type CollectionStats = {
-  total: number;
-  uniqueBreeds: number;
-};
-
-export function computeCollectionStats(entries: PigeonEntry[]): CollectionStats {
-  const breeds = new Set(entries.map((entry) => entry.breed));
-  return {
-    total: entries.length,
-    uniqueBreeds: breeds.size,
-  };
+/** 新しい順ソート済みコレクションでのスキャン通し番号（第 N 羽） */
+export function getScanNumber(entries: PigeonEntry[], entryId: string): number | null {
+  const index = entries.findIndex((entry) => entry.id === entryId);
+  if (index < 0) return null;
+  return entries.length - index;
 }
 
 export async function savePigeonScan(

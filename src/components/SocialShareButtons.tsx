@@ -16,17 +16,23 @@ import {
 
 type SocialShareButtonsProps = {
   shareRef: React.RefObject<ViewType | null>;
-  breed: string;
+  scanNo: number;
   disabled?: boolean;
+  onBusyChange?: (busy: boolean) => void;
 };
 
 export function SocialShareButtons({
   shareRef,
-  breed,
+  scanNo,
   disabled = false,
+  onBusyChange,
 }: SocialShareButtonsProps) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [busy, setBusy] = React.useState<'instagram' | 'x' | null>(null);
+
+  React.useEffect(() => {
+    onBusyChange?.(busy !== null);
+  }, [busy, onBusyChange]);
 
   const runShare = React.useCallback(
     async (target: 'instagram' | 'x') => {
@@ -36,9 +42,9 @@ export function SocialShareButtons({
         void hapticLight();
         const fileUri = await captureShareImage(shareRef.current);
         if (target === 'instagram') {
-          await shareToInstagramStory(fileUri, breed);
+          await shareToInstagramStory(fileUri, scanNo, locale);
         } else {
-          await shareToX(fileUri, breed);
+          await shareToX(fileUri, scanNo, locale);
         }
       } catch (e) {
         Alert.alert(
@@ -49,7 +55,7 @@ export function SocialShareButtons({
         setBusy(null);
       }
     },
-    [breed, busy, disabled, shareRef, t.common.shareError, t.share.shareFailed],
+    [scanNo, busy, disabled, locale, shareRef, t.common.shareError, t.share.shareFailed],
   );
 
   const isDisabled = disabled || busy !== null;

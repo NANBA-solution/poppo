@@ -9,9 +9,10 @@ import { Screen } from '@/components/ui/Screen';
 import { useI18n } from '@/i18n/I18nProvider';
 import { completeOnboarding } from '@/services/onboardingService';
 import { colors } from '@/theme/tokens';
+import { useTabRouter } from '@/hooks/useTabRouter';
 import { hapticLight } from '@/utils/haptics';
+import { playPigeonTab } from '@/utils/pigeonSound';
 import type { OnboardingScene } from '@/constants/onboardingIllustrations';
-import { useRouter } from 'expo-router';
 import * as React from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,7 +25,7 @@ type StepDef = {
 };
 
 export default function OnboardingScreen() {
-  const router = useRouter();
+  const router = useTabRouter();
   const insets = useSafeAreaInsets();
   const { t } = useI18n();
   const [step, setStep] = React.useState(0);
@@ -38,7 +39,7 @@ export default function OnboardingScreen() {
         body: t.onboarding.step1Body,
       },
       {
-        scene: 'ai',
+        scene: 'detect',
         tag: t.onboarding.step2Tag,
         title: t.onboarding.step2Title,
         body: t.onboarding.step2Body,
@@ -64,6 +65,7 @@ export default function OnboardingScreen() {
       await goCamera();
       return;
     }
+    void playPigeonTab();
     setStep((s) => s + 1);
   }, [goCamera, step, steps.length]);
 

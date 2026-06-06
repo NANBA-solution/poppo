@@ -135,26 +135,34 @@ function maxScansWithinHour(entries: PigeonEntry[]): number {
   return best;
 }
 
-function maxBreedCount(entries: PigeonEntry[]): number {
-  const counts = new Map<string, number>();
-  for (const e of entries) {
-    counts.set(e.breed, (counts.get(e.breed) ?? 0) + 1);
+function uniqueScanDays(entries: PigeonEntry[]): number {
+  return new Set(entries.map(scanDateKey)).size;
+}
+
+function maxScansWithinMinutes(entries: PigeonEntry[], minutes: number): number {
+  if (entries.length === 0) return 0;
+  const windowMs = minutes * 60_000;
+  const times = entries
+    .map((e) => new Date(e.scannedAt).getTime())
+    .sort((a, b) => a - b);
+  let best = 1;
+  let left = 0;
+  for (let right = 0; right < times.length; right += 1) {
+    while (times[right]! - times[left]! > windowMs) left += 1;
+    best = Math.max(best, right - left + 1);
   }
-  return Math.max(0, ...counts.values());
+  return best;
 }
 
-function uniqueBreeds(entries: PigeonEntry[]): number {
-  return new Set(entries.map((x) => x.breed)).size;
-}
-
-const PENDING_BREED = '未判定';
-
-function countScans(entries: PigeonEntry[]): number {
-  return entries.length;
-}
-
-function countPending(entries: PigeonEntry[]): number {
-  return entries.filter((x) => x.breed === PENDING_BREED).length;
+function maxDistinctHoursSameDay(entries: PigeonEntry[]): number {
+  const byDay = new Map<string, Set<number>>();
+  for (const e of entries) {
+    const key = scanDateKey(e);
+    const hours = byDay.get(key) ?? new Set<number>();
+    hours.add(scanHour(e));
+    byDay.set(key, hours);
+  }
+  return Math.max(0, ...[...byDay.values()].map((s) => s.size));
 }
 
 function countAtHM(entries: PigeonEntry[], hour: number, minute: number): number {
@@ -186,17 +194,6 @@ function countWeekday(entries: PigeonEntry[], weekday: number): number {
 function hasAllWeekdays(entries: PigeonEntry[]): boolean {
   const days = new Set(entries.map((x) => new Date(x.scannedAt).getDay()));
   return [0, 1, 2, 3, 4, 5, 6].every((d) => days.has(d));
-}
-
-function maxBreedsSameDay(entries: PigeonEntry[]): number {
-  const byDay = new Map<string, Set<string>>();
-  for (const e of entries) {
-    const key = scanDateKey(e);
-    const breeds = byDay.get(key) ?? new Set<string>();
-    breeds.add(e.breed);
-    byDay.set(key, breeds);
-  }
-  return Math.max(0, ...[...byDay.values()].map((s) => s.size));
 }
 
 function maxScansSameMinute(entries: PigeonEntry[]): number {
@@ -240,7 +237,7 @@ function hasConsecutiveMidnightDays(entries: PigeonEntry[]): boolean {
 }
 
 function scanCount(entries: PigeonEntry[], max: number) {
-  return { current: Math.min(countScans(entries), max), max };
+  return { current: Math.min(entries.length, max), max };
 }
 
 function boolProgress(done: boolean) {
@@ -281,27 +278,27 @@ export const QUEST_DEFS: QuestDef[] = [
   {
     id: 'breeds_3',
     icon: 'book',
-    check: (e) => uniqueBreeds(e) >= 3,
+    check: (e) => uniqueScanDays(e) >= 3,
     progress: (e) => ({
-      current: Math.min(uniqueBreeds(e), 3),
+      current: Math.min(uniqueScanDays(e), 3),
       max: 3,
     }),
   },
   {
     id: 'breeds_10',
     icon: 'book',
-    check: (e) => uniqueBreeds(e) >= 10,
+    check: (e) => uniqueScanDays(e) >= 10,
     progress: (e) => ({
-      current: Math.min(uniqueBreeds(e), 10),
+      current: Math.min(uniqueScanDays(e), 10),
       max: 10,
     }),
   },
   {
     id: 'breeds_30',
     icon: 'book',
-    check: (e) => uniqueBreeds(e) >= 30,
+    check: (e) => uniqueScanDays(e) >= 30,
     progress: (e) => ({
-      current: Math.min(uniqueBreeds(e), 30),
+      current: Math.min(uniqueScanDays(e), 30),
       max: 30,
     }),
   },
@@ -381,9 +378,9 @@ export const QUEST_DEFS: QuestDef[] = [
   {
     id: 'breed_clone_5',
     icon: 'pigeon',
-    check: (e) => maxBreedCount(e) >= 5,
+    check: (e) => maxScansWithinMinutes(e, 5) >= 5,
     progress: (e) => ({
-      current: Math.min(maxBreedCount(e), 5),
+      current: Math.min(maxScansWithinMinutes(e, 5), 5),
       max: 5,
     }),
   },
@@ -467,23 +464,24 @@ export const QUEST_DEFS: QuestDef[] = [
   {
     id: 'pending_5',
     icon: 'brain',
-    check: (e) => countPending(e) >= 5,
-    progress: (e) => ({ current: Math.min(countPending(e), 5), max: 5 }),
+    check: (e) => countAtMinute(e, 5) >= 5,
+    progress: (e) => ({ current: Math.min(countAtMinute(e, 5), 5), max: 5 }),
   },
   {
     id: 'pending_20',
     icon: 'brain',
-    check: (e) => countPending(e) >= 20,
-    progress: (e) => ({ current: Math.min(countPending(e), 20), max: 20 }),
+    check: (e) => uniqueScanDays(e) >= 20,
+    progress: (e) => ({ current: Math.min(uniqueScanDays(e), 20), max: 20 }),
   },
   {
     id: 'pending_purist_10',
     icon: 'book',
-    check: (e) => e.length >= 10 && e.every((x) => x.breed === PENDING_BREED),
+    check: (e) =>
+      e.length >= 10 && e.every((x) => new Date(x.scannedAt).getMinutes() === 0),
     progress: (e) => {
       if (e.length === 0) return { current: 0, max: 10 };
-      const pure = e.every((x) => x.breed === PENDING_BREED);
-      if (!pure) return { current: 0, max: 10 };
+      const onTheHour = e.every((x) => new Date(x.scannedAt).getMinutes() === 0);
+      if (!onTheHour) return { current: 0, max: 10 };
       return { current: Math.min(e.length, 10), max: 10 };
     },
   },
@@ -651,14 +649,20 @@ export const QUEST_DEFS: QuestDef[] = [
   {
     id: 'rainbow_day',
     icon: 'sparkle',
-    check: (e) => maxBreedsSameDay(e) >= 5,
-    progress: (e) => ({ current: Math.min(maxBreedsSameDay(e), 5), max: 5 }),
+    check: (e) => maxDistinctHoursSameDay(e) >= 5,
+    progress: (e) => ({
+      current: Math.min(maxDistinctHoursSameDay(e), 5),
+      max: 5,
+    }),
   },
   {
     id: 'monoculture_10',
     icon: 'pigeon',
-    check: (e) => maxBreedCount(e) >= 10,
-    progress: (e) => ({ current: Math.min(maxBreedCount(e), 10), max: 10 }),
+    check: (e) => longestDayStreak(e) >= 10,
+    progress: (e) => ({
+      current: Math.min(longestDayStreak(e), 10),
+      max: 10,
+    }),
   },
   {
     id: 'same_minute_3',
@@ -678,8 +682,8 @@ export const QUEST_DEFS: QuestDef[] = [
   {
     id: 'breed_chaos_7',
     icon: 'brain',
-    check: (e) => maxBreedsSameDay(e) >= 7,
-    progress: (e) => ({ current: Math.min(maxBreedsSameDay(e), 7), max: 7 }),
+    check: (e) => maxSameDayCount(e) >= 7,
+    progress: (e) => ({ current: Math.min(maxSameDayCount(e), 7), max: 7 }),
   },
   {
     id: 'hour_4_four',
