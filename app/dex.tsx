@@ -43,7 +43,7 @@ export default function DexScreen() {
 
   const dex = React.useMemo(() => buildDex(entries), [entries]);
   const completion = getDexCompletion(entries);
-  const playerTitle = getPlayerTitle(entries.length, 0, t);
+  const playerTitle = getPlayerTitle(entries.length, t);
 
   return (
     <Screen edges={false}>
@@ -77,9 +77,6 @@ export default function DexScreen() {
                 <Image source={{ uri: item.sampleImageUri }} style={styles.thumb} />
                 <View style={styles.cardBody}>
                   <Text style={styles.breed}>{item.breed}</Text>
-                  <Text style={styles.nickname} numberOfLines={2}>
-                    {item.latestNickname}
-                  </Text>
                   <Text style={styles.meta}>
                     {formatMessage(t.profile.dexCount, { count: item.count })} ·{' '}
                     {t.profile.dexFirstSeen}
@@ -101,9 +98,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     gap: 6,
   },
-  heroTitle: { color: colors.gold, fontSize: 20, fontWeight: '800' },
+  heroTitle: { color: colors.ink, fontSize: 20, fontWeight: '900' },
   heroSub: { color: colors.textMuted, fontSize: 14 },
-  heroProgress: { color: colors.accent, fontSize: 13, fontWeight: '700', marginTop: 4 },
+  heroProgress: { color: colors.accentBright, fontSize: 13, fontWeight: '800', marginTop: 4 },
   empty: {
     color: colors.textMuted,
     textAlign: 'center',
@@ -126,6 +123,5 @@ const styles = StyleSheet.create({
   },
   cardBody: { flex: 1, justifyContent: 'center', gap: 4 },
   breed: { color: colors.text, fontSize: 16, fontWeight: '800' },
-  nickname: { color: colors.text, fontSize: 13, lineHeight: 18, opacity: 0.85 },
   meta: { color: colors.textMuted, fontSize: 12 },
 });

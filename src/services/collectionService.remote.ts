@@ -12,7 +12,6 @@ const SCAN_BUCKET = 'scan-images';
 type ScanRow = {
   client_id: string;
   breed: string;
-  nickname: string;
   image_url: string | null;
   scanned_at: string;
 };
@@ -22,7 +21,6 @@ function rowToEntry(row: ScanRow): PigeonEntry {
     id: row.client_id,
     imageUri: row.image_url ?? '',
     breed: row.breed,
-    nickname: row.nickname,
     scannedAt: row.scanned_at,
   };
 }
@@ -66,7 +64,7 @@ async function fetchRemoteScans(userId: string): Promise<PigeonEntry[]> {
 
   const { data, error } = await supabase
     .from('pigeon_scans')
-    .select('client_id, breed, nickname, image_url, scanned_at')
+    .select('client_id, breed, image_url, scanned_at')
     .eq('user_id', userId)
     .order('scanned_at', { ascending: false });
 
@@ -89,7 +87,6 @@ async function pushEntryToCloud(entry: PigeonEntry, userId: string): Promise<voi
       user_id: userId,
       client_id: entry.id,
       breed: entry.breed,
-      nickname: entry.nickname,
       image_url: imageUrl,
       scanned_at: entry.scannedAt,
     },

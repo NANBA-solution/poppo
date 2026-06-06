@@ -2,35 +2,27 @@
  * Vercel Serverless: POST /api/analyze-pigeon
  * 環境変数: ANTHROPIC_API_KEY, POPPO_API_SECRET（任意）, ANTHROPIC_MODEL（任意）
  */
-const PROMPT = [
-  'あなたはハトの姿勢・視線・状況を読む、人間社会のあるあるに例える底辺お笑い芸人です。',
-  'この写真から品種名（breed）と二つ名（nickname）を1組だけ返してください。',
+const DETECT_PROMPT = [
+  '写真にハト／鳩（カワラバト・ドバト等の鳩類）が写っているかだけ判定してください。',
+  'スズメ・カラス・ツバメなど他の鳥、人・犬・猫・風景・食べ物は false。',
+  'JSON1行のみ: {"is_pigeon":true} または {"is_pigeon":false}',
+  '余計な文は禁止。',
+].join('\n');
+
+const ANALYZE_PROMPT = [
+  'あなたはハト（カワラバト・ドバト等の鳩類）の品種を判定する専門家です。',
+  'まず写真にハト／鳩が写っているか厳密に判定し、JSON1行のみ返してください。',
   '',
-  '# 二つ名のルール',
-  '- 15文字以内',
-  '- ハトの姿勢・視線・状況を必ず読む',
-  '- 人間社会のあるあるに例える',
-  '- 読んだ瞬間「わかる」となる解像度',
-  '- スクショしてLINEで送りたくなるレベル',
-  '- ふわっとしたシュールは禁止',
-  '- 「哲学者」「求道者」系の抽象ワードも禁止',
-  '',
-  '# トーンの参考',
-  '良い例：「3秒後に絶対踏まれるやつ」',
-  '良い例：「昨日もここにいたな」',
-  '良い例：「誰かを待ってるわけじゃない」',
-  '良い例：「パン屑への執着心が仕事を超えた男」',
-  '悪い例：「灰色の哲学者」← 抽象的すぎ',
-  '悪い例：「自由を求める魂」← 意味ない',
-  '',
-  '# 品種名',
-  'ガチ分類よりネタの肩書き。15文字以内推奨。',
+  '# ハトが写っている場合',
+  '- is_pigeon: true',
+  '- breed: 品種名（日本語、15文字以内。例：ドバト、カワラバト）',
   '',
   '# ハトが写っていない場合',
-  '写真の状況をそのままボケる。ハト不在も鑑定対象。',
-  '例：breed「深夜エンジニア鳩（不在）」、nickname「画面凝視の3時」',
+  '- is_pigeon: false',
+  '- breed: ""',
   '',
-  '返答はJSON1行のみ：{"breed":"品種名","nickname":"二つ名"}。二つ名だけの意味で「説明不要」—余計な文は一切出力禁止。',
+  '返答例: {"is_pigeon":true,"breed":"カワラバト"} または {"is_pigeon":false,"breed":""}',
+  '余計な文は一切出力禁止。',
 ].join('\n');
 
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
@@ -40,6 +32,7 @@ type Body = {
   base64?: string;
   mediaType?: string;
   model?: string;
+  mode?: 'detect' | 'analyze';
 };
 
 type VercelReq = {
@@ -70,7 +63,8 @@ async function callClaude(
   model: string,
   base64: string,
   mediaType: string,
-): Promise<{ breed: string; nickname: string }> {
+  mode: 'detect' | 'analyze',
+): Promise<{ is_pigeon: boolean; breed: string }> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -80,8 +74,8 @@ async function callClaude(
     },
     body: JSON.stringify({
       model,
-      max_tokens: 512,
-      temperature: 1,
+      max_tokens: mode === 'detect' ? 64 : 512,
+      temperature: mode === 'detect' ? 0 : 1,
       messages: [
         {
           role: 'user',
@@ -90,7 +84,7 @@ async function callClaude(
               type: 'image',
               source: { type: 'base64', media_type: mediaType, data: base64 },
             },
-            { type: 'text', text: PROMPT },
+            { type: 'text', text: mode === 'detect' ? DETECT_PROMPT : ANALYZE_PROMPT },
           ],
         },
       ],
@@ -112,19 +106,22 @@ async function callClaude(
   if (!text) throw new Error('Claude からテキスト応答がありませんでした。');
 
   const parsed: unknown = JSON.parse(extractJsonObject(text));
-  if (
-    typeof parsed !== 'object' ||
-    parsed === null ||
-    !('breed' in parsed) ||
-    !('nickname' in parsed)
-  ) {
+  if (typeof parsed !== 'object' || parsed === null) {
     throw new Error('Claude の応答形式が不正です。');
   }
-  const { breed, nickname } = parsed as Record<string, unknown>;
-  if (typeof breed !== 'string' || typeof nickname !== 'string') {
-    throw new Error('breed / nickname の型が不正です。');
+  const row = parsed as Record<string, unknown>;
+  const isPigeon = row.is_pigeon === true;
+  const breed = typeof row.breed === 'string' ? row.breed.trim() : '';
+  if (!isPigeon) {
+    return { is_pigeon: false, breed: '' };
   }
-  return { breed: breed.trim(), nickname: nickname.trim() };
+  if (mode === 'detect') {
+    return { is_pigeon: true, breed: '' };
+  }
+  if (!breed) {
+    throw new Error('品種が取得できませんでした。');
+  }
+  return { is_pigeon: true, breed };
 }
 
 export default async function handler(req: VercelReq, res: VercelRes) {
@@ -166,13 +163,14 @@ export default async function handler(req: VercelReq, res: VercelRes) {
     return;
   }
 
+  const mode = body.mode === 'analyze' ? 'analyze' : 'detect';
   const primary = body.model?.trim() || process.env.ANTHROPIC_MODEL?.trim() || DEFAULT_MODEL;
   const models = [primary, ...FALLBACK_MODELS.filter((m) => m !== primary)];
 
   let lastError: Error | null = null;
   for (const model of models) {
     try {
-      const result = await callClaude(apiKey, model, base64, mediaType);
+      const result = await callClaude(apiKey, model, base64, mediaType, mode);
       res.status(200).json(result);
       return;
     } catch (e) {

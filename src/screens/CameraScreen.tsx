@@ -2,7 +2,6 @@ import { FloatingPill } from '@/components/ui/FloatingPill';
 import { useI18n } from '@/i18n/I18nProvider';
 import { getPigeonCount } from '@/services/collectionService';
 import { colors } from '@/theme/tokens';
-import { isSimulator } from '@/utils/runtime';
 import { hapticLight } from '@/utils/haptics';
 import { playPigeonShutter } from '@/utils/pigeonSound';
 import type { IconName } from '@/components/icons/AppIcon';
@@ -25,6 +24,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 type FocusPoint = { x: number; y: number };
 
 const FLASH_CYCLE: FlashMode[] = ['off', 'on', 'auto'];
+const CAMERA_READY_TIMEOUT_MS = 8000;
+const TAKE_PICTURE_TIMEOUT_MS = 12000;
+const TAKE_PICTURE_RETRIES = 3;
+
+function delay(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
 
 export default function CameraScreen() {
   const router = useRouter();
@@ -33,6 +39,8 @@ export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
 
   const cameraRef = React.useRef<InstanceType<typeof CameraView>>(null);
+  const cameraReadyRef = React.useRef(false);
+  const readyWaitersRef = React.useRef<Array<() => void>>([]);
   const [ready, setReady] = React.useState(false);
   const [capturing, setCapturing] = React.useState(false);
   const [zoom, setZoom] = React.useState(0);
@@ -42,14 +50,7 @@ export default function CameraScreen() {
   const focusTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const [collectionCount, setCollectionCount] = React.useState(0);
   const [flash, setFlash] = React.useState<FlashMode>('off');
-  const [screenFocused, setScreenFocused] = React.useState(false);
   const [permissionSlow, setPermissionSlow] = React.useState(false);
-  const simulator = isSimulator();
-
-  React.useEffect(() => {
-    if (!simulator || !permission?.granted) return;
-    setReady(true);
-  }, [simulator, permission?.granted]);
 
   React.useEffect(() => {
     if (permission != null) {
@@ -67,14 +68,12 @@ export default function CameraScreen() {
 
   useFocusEffect(
     React.useCallback(() => {
-      setScreenFocused(true);
       let active = true;
       void getPigeonCount().then((count) => {
         if (active) setCollectionCount(count);
       });
       return () => {
         active = false;
-        setScreenFocused(false);
       };
     }, []),
   );
@@ -134,58 +133,108 @@ export default function CameraScreen() {
     });
   }, []);
 
-  const pickFromLibrary = React.useCallback(async () => {
-    try {
-      setCapturing(true);
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert(t.camera.permissionTitle, t.camera.permissionBody);
-        return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        quality: 0.92,
-      });
-      if (result.canceled || !result.assets[0]?.uri) return;
-      void hapticLight();
+  const markCameraReady = React.useCallback(() => {
+    if (cameraReadyRef.current) return;
+    cameraReadyRef.current = true;
+    setReady(true);
+    for (const resolve of readyWaitersRef.current) resolve();
+    readyWaitersRef.current = [];
+  }, []);
+
+  const waitForCameraReady = React.useCallback(async () => {
+    if (cameraReadyRef.current) return;
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        readyWaitersRef.current = readyWaitersRef.current.filter((fn) => fn !== onReady);
+        reject(new Error(t.camera.notReady));
+      }, CAMERA_READY_TIMEOUT_MS);
+      const onReady = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+      readyWaitersRef.current.push(onReady);
+    });
+  }, [t.camera.notReady]);
+
+  React.useEffect(() => {
+    cameraReadyRef.current = false;
+    setReady(false);
+    const fallback = setTimeout(() => markCameraReady(), 1200);
+    return () => clearTimeout(fallback);
+  }, [markCameraReady]);
+
+  const navigateToResult = React.useCallback(
+    (uri: string) => {
       router.push({
         pathname: '/result',
-        params: { uri: encodeURIComponent(result.assets[0].uri) },
+        params: { uri: encodeURIComponent(uri) },
       });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : t.camera.captureFailed;
-      Alert.alert(t.camera.captureError, msg);
-    } finally {
-      setCapturing(false);
+    },
+    [router],
+  );
+
+  const captureWithSystemCamera = React.useCallback(async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(t.camera.permissionTitle, t.camera.permissionBody);
+      return;
     }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      quality: 0.92,
+    });
+    if (result.canceled || !result.assets[0]?.uri) return;
+    void hapticLight();
+    navigateToResult(result.assets[0].uri);
   }, [
-    router,
-    t.camera.captureError,
-    t.camera.captureFailed,
+    navigateToResult,
     t.camera.permissionBody,
     t.camera.permissionTitle,
   ]);
 
+  const takePictureWithTimeout = React.useCallback(
+    async (cam: NonNullable<typeof cameraRef.current>) => {
+      return Promise.race([
+        cam.takePictureAsync({ quality: 0.92, skipProcessing: false }),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error(t.camera.captureFailed)), TAKE_PICTURE_TIMEOUT_MS);
+        }),
+      ]);
+    },
+    [t.camera.captureFailed],
+  );
+
   const onShutter = React.useCallback(async () => {
-    if (!ready || capturing) return;
-
-    if (simulator) {
-      await pickFromLibrary();
-      return;
-    }
-
-    const cam = cameraRef.current;
-    if (!cam) return;
+    if (capturing) return;
 
     try {
       setCapturing(true);
       void hapticLight();
       void playPigeonShutter();
-      const shot = await cam.takePictureAsync({ quality: 0.92, skipProcessing: false });
-      router.push({
-        pathname: '/result',
-        params: { uri: encodeURIComponent(shot.uri) },
-      });
+
+      const cam = cameraRef.current;
+      if (cam) {
+        try {
+          await waitForCameraReady();
+          for (let attempt = 0; attempt < TAKE_PICTURE_RETRIES; attempt += 1) {
+            try {
+              const shot = await takePictureWithTimeout(cam);
+              if (shot?.uri) {
+                navigateToResult(shot.uri);
+                return;
+              }
+            } catch {
+              if (attempt < TAKE_PICTURE_RETRIES - 1) {
+                await delay(400);
+              }
+            }
+          }
+        } catch {
+          // アプリ内カメラが未準備のときは標準カメラへ
+        }
+      }
+
+      await captureWithSystemCamera();
     } catch (e) {
       const msg = e instanceof Error ? e.message : t.camera.captureFailed;
       Alert.alert(t.camera.captureError, msg);
@@ -193,11 +242,11 @@ export default function CameraScreen() {
       setCapturing(false);
     }
   }, [
+    captureWithSystemCamera,
     capturing,
-    pickFromLibrary,
-    ready,
-    router,
-    simulator,
+    navigateToResult,
+    takePictureWithTimeout,
+    waitForCameraReady,
     t.camera.captureError,
     t.camera.captureFailed,
   ]);
@@ -230,54 +279,35 @@ export default function CameraScreen() {
 
   return (
     <View style={styles.root}>
-      {screenFocused ? (
+      <View style={styles.cameraWrap}>
+        <CameraView
+          ref={cameraRef}
+          style={styles.camera}
+          facing="back"
+          mode="picture"
+          zoom={zoom}
+          flash={flash}
+          onCameraReady={markCameraReady}
+          onMountError={(e) => Alert.alert(t.camera.mountError, e.message)}
+        />
         <GestureDetector gesture={cameraGestures}>
-          <View style={styles.cameraWrap}>
-            <CameraView
-              ref={cameraRef}
-              style={styles.camera}
-              facing="back"
-              mode="picture"
-              zoom={zoom}
-              flash={flash}
-              autofocus="off"
-              onCameraReady={() => setReady(true)}
-              onMountError={(e) => Alert.alert(t.camera.mountError, e.message)}
-            />
-            {focusPoint && (
-              <View
-                pointerEvents="none"
-                style={[
-                  styles.focusRing,
-                  { left: focusPoint.x - 28, top: focusPoint.y - 28 },
-                ]}
-              />
-            )}
-          </View>
+          <View style={styles.gestureLayer} />
         </GestureDetector>
-      ) : (
-        <View style={styles.cameraWrap} />
-      )}
-
-      {!ready && (
-        <View style={[styles.overlay, StyleSheet.absoluteFillObject]} pointerEvents="none">
-          <ActivityIndicator size="large" color="#fff" />
-          <Text style={styles.overlayText}>{t.camera.preparing}</Text>
-        </View>
-      )}
-
-      {simulator && ready ? (
-        <View style={[styles.simulatorBanner, { top: insets.top + 72 }]} pointerEvents="box-none">
-          <Text style={styles.simulatorBannerText}>{t.camera.simulatorHint}</Text>
-          <Pressable style={styles.primaryBtn} onPress={pickFromLibrary} disabled={capturing}>
-            <Text style={styles.primaryBtnLabel}>{t.camera.simulatorPick}</Text>
-          </Pressable>
-        </View>
-      ) : null}
+        {focusPoint ? (
+          <View
+            pointerEvents="none"
+            style={[
+              styles.focusRing,
+              { left: focusPoint.x - 28, top: focusPoint.y - 28 },
+            ]}
+          />
+        ) : null}
+      </View>
 
       <View style={[styles.topBar, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
         <FloatingPill
           icon={flashIcon}
+          variant="paper"
           label={
             flash === 'off'
               ? t.camera.flashOff
@@ -289,7 +319,8 @@ export default function CameraScreen() {
         />
         <View style={styles.topRight}>
           <FloatingPill
-            icon="pigeon"
+            imageIcon={require('../../assets/brand-icon.png')}
+            variant="paper"
             label={t.camera.myPoppo}
             onPress={() => router.push('/profile')}
             badge={collectionCount > 0 ? (collectionCount > 99 ? '99+' : collectionCount) : undefined}
@@ -304,17 +335,24 @@ export default function CameraScreen() {
         <Text style={styles.hint}>{t.camera.hint}</Text>
         <View style={styles.toolbarRow}>
           <FloatingPill
-            icon="feed"
-            label={t.feed.feedFab}
-            onPress={() => router.push('/feed')}
+            icon="book"
+            variant="paper"
+            label={t.profile.dex}
+            onPress={() => router.push('/dex')}
+          />
+          <FloatingPill
+            icon="target"
+            variant="paper"
+            label={t.profile.quests}
+            onPress={() => router.push('/quests')}
           />
         </View>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t.camera.shutter}
-          disabled={!ready || capturing}
+          disabled={capturing}
           onPress={onShutter}
-          style={[styles.shutterOuter, (!ready || capturing) && styles.shutterDisabled]}
+          style={[styles.shutterOuter, capturing && styles.shutterDisabled]}
         >
           {capturing ? (
             <ActivityIndicator color="#222" />
@@ -338,13 +376,16 @@ const styles = StyleSheet.create({
   camera: {
     flex: 1,
   },
+  gestureLayer: {
+    ...StyleSheet.absoluteFillObject,
+  },
   focusRing: {
     position: 'absolute',
     width: 56,
     height: 56,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: 'rgba(167,139,250,0.95)',
+    borderColor: colors.onAccent,
     backgroundColor: 'transparent',
   },
   centered: {
@@ -383,33 +424,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.onAccent,
   },
-  overlay: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    gap: 10,
-  },
-  overlayText: {
-    color: colors.text,
-    fontWeight: '600',
-  },
-  simulatorBanner: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: 'rgba(20,20,28,0.92)',
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    gap: 12,
-  },
-  simulatorBannerText: {
-    color: colors.textMuted,
-    fontSize: 13,
-    lineHeight: 20,
-    textAlign: 'center',
-  },
   topBar: {
     position: 'absolute',
     left: 16,
@@ -429,10 +443,12 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     paddingTop: 12,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'rgba(26,26,26,0.55)',
     gap: 10,
   },
   toolbarRow: {
+    flexDirection: 'row',
+    gap: 10,
     marginBottom: 4,
   },
   hint: {
@@ -445,7 +461,7 @@ const styles = StyleSheet.create({
     height: 72,
     borderRadius: 36,
     borderWidth: 4,
-    borderColor: '#fff',
+    borderColor: colors.onAccent,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -456,6 +472,6 @@ const styles = StyleSheet.create({
     width: 54,
     height: 54,
     borderRadius: 27,
-    backgroundColor: colors.text,
+    backgroundColor: colors.onAccent,
   },
 });

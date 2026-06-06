@@ -22,6 +22,7 @@ module.exports = {
     slug: 'poppo',
     ios: {
       ...require('./app.json').expo.ios,
+      deploymentTarget: '15.5',
       bundleIdentifier: 'app.poppo.mobile',
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,

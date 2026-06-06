@@ -34,8 +34,8 @@ export async function captureShareImage(ref: View): Promise<string> {
   });
 }
 
-async function copyCaption(breed: string, nickname: string): Promise<void> {
-  await Clipboard.setStringAsync(buildShareCaption(breed, nickname));
+async function copyCaption(breed: string): Promise<void> {
+  await Clipboard.setStringAsync(buildShareCaption(breed));
 }
 
 async function openShareSheet(fileUri: string, dialogTitle: string): Promise<boolean> {
@@ -118,17 +118,13 @@ async function shareXNative(image: string, caption: string): Promise<boolean> {
 }
 
 /** Instagram ストーリーへ共有 */
-export async function shareToInstagramStory(
-  fileUri: string,
-  breed: string,
-  nickname: string,
-): Promise<void> {
+export async function shareToInstagramStory(fileUri: string, breed: string): Promise<void> {
   if (Platform.OS === 'web') {
     throw new Error('Web では Instagram ストーリー共有に対応していません。');
   }
 
   const image = normalizeFileUri(fileUri);
-  await copyCaption(breed, nickname);
+  await copyCaption(breed);
 
   const hasInstagram = await isInstagramInstalled();
   if (!hasInstagram) {
@@ -196,20 +192,16 @@ export async function shareToInstagramStory(
 }
 
 /** X（Twitter）へ投稿 */
-export async function shareToX(
-  fileUri: string,
-  breed: string,
-  nickname: string,
-): Promise<void> {
+export async function shareToX(fileUri: string, breed: string): Promise<void> {
   if (Platform.OS === 'web') {
-    const text = encodeURIComponent(buildShareCaption(breed, nickname));
+    const text = encodeURIComponent(buildShareCaption(breed));
     await Linking.openURL(`https://x.com/intent/tweet?text=${text}`);
     return;
   }
 
-  const caption = buildShareCaption(breed, nickname);
+  const caption = buildShareCaption(breed);
   const image = normalizeFileUri(fileUri);
-  await copyCaption(breed, nickname);
+  await copyCaption(breed);
 
   // 本番ビルド: X アプリ直共有
   if (await shareXNative(image, caption)) {

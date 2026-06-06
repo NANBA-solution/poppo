@@ -6,8 +6,10 @@ import {
   makeDirectoryAsync,
 } from 'expo-file-system/legacy';
 
+/** アプリ専用ストレージ（カメラロール・クラウドには保存しない） */
+
 import type { PigeonEntry } from '@/types/collection';
-import type { PigeonScanJson } from '@/services/aiService';
+import type { PigeonScanJson } from '@/types/scan';
 
 const STORAGE_KEY = '@poppo/collection/v1';
 export const SCAN_DIR = `${documentDirectory ?? ''}poppo-scans/`;
@@ -16,10 +18,20 @@ async function ensureScanDir(): Promise<void> {
   await makeDirectoryAsync(SCAN_DIR, { intermediates: true });
 }
 
+async function removeTempSource(sourceUri: string): Promise<void> {
+  if (!sourceUri.startsWith('file:') || sourceUri.startsWith(SCAN_DIR)) return;
+  try {
+    await deleteAsync(sourceUri, { idempotent: true });
+  } catch {
+    // 一時ファイル削除失敗は保存成功を妨げない
+  }
+}
+
 async function persistImage(sourceUri: string, id: string): Promise<string> {
   await ensureScanDir();
   const dest = `${SCAN_DIR}${id}.jpg`;
   await copyAsync({ from: sourceUri, to: dest });
+  await removeTempSource(sourceUri);
   return dest;
 }
 
@@ -46,7 +58,6 @@ function isPigeonEntry(value: unknown): value is PigeonEntry {
     typeof v.id === 'string' &&
     typeof v.imageUri === 'string' &&
     typeof v.breed === 'string' &&
-    typeof v.nickname === 'string' &&
     typeof v.scannedAt === 'string'
   );
 }
@@ -61,7 +72,6 @@ export async function savePigeonScanLocal(
     id,
     imageUri,
     breed: result.breed,
-    nickname: result.nickname,
     scannedAt: new Date().toISOString(),
   };
 

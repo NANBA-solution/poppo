@@ -2,55 +2,52 @@ import {
   onboardingIllustrations,
   type OnboardingScene,
 } from '@/constants/onboardingIllustrations';
-import { colors } from '@/theme/tokens';
+import { borders, colors, radii, shadow } from '@/theme/tokens';
 import { Image, StyleSheet, View } from 'react-native';
 
 type Props = {
   scene: OnboardingScene;
-  accentColor?: string;
 };
 
-/** オンボーディング各ステップのイラスト */
-export function OnboardingHero({ scene, accentColor = colors.accent }: Props) {
+/** ステップ別イラスト（PNG） */
+export function OnboardingHero({ scene }: Props) {
   return (
-    <View
-      style={[styles.frame, { borderColor: `${accentColor}33`, shadowColor: accentColor }]}
-      pointerEvents="none"
-    >
-      <View style={[styles.glow, { backgroundColor: `${accentColor}12` }]} />
-      <Image
-        source={onboardingIllustrations[scene]}
-        style={styles.image}
-        resizeMode="contain"
-        accessibilityIgnoresInvertColors
-        accessibilityRole="image"
-      />
+    <View style={styles.outer} pointerEvents="none">
+      <View style={styles.frame}>
+        <Image
+          source={onboardingIllustrations[scene]}
+          style={styles.image}
+          resizeMode="contain"
+          accessibilityIgnoresInvertColors
+          accessibilityRole="image"
+        />
+      </View>
     </View>
   );
 }
 
-const SIZE = 280;
+const WIDTH = 320;
+const HEIGHT = 220;
 
 const styles = StyleSheet.create({
-  frame: {
-    width: SIZE,
-    height: SIZE,
-    borderRadius: 32,
-    borderWidth: 1,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    overflow: 'hidden',
+  outer: {
+    width: WIDTH,
+    height: HEIGHT,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
-    elevation: 6,
   },
-  glow: {
-    ...StyleSheet.absoluteFillObject,
+  frame: {
+    width: WIDTH,
+    height: HEIGHT,
+    borderRadius: radii.xl,
+    borderWidth: borders.thin,
+    borderColor: colors.border,
+    backgroundColor: colors.paper,
+    overflow: 'hidden',
+    ...shadow.card,
   },
   image: {
-    width: SIZE - 8,
-    height: SIZE - 8,
+    width: '100%',
+    height: '100%',
   },
 });

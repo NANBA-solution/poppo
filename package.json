@@ -6,6 +6,8 @@
     "start": "expo start",
     "start:dev": "expo start --dev-client",
     "start:dev:sim": "expo start --dev-client --localhost",
+    "start:dev:tunnel": "expo start --dev-client --tunnel",
+    "start:dev:usb": "bash scripts/start-dev-usb.sh",
     "open:ios:sim": "REACT_NATIVE_PACKAGER_HOSTNAME=127.0.0.1 expo run:ios --device 9854EA71-D57B-42F5-BC91-27F5F67617AC",
     "start:dev:clear": "expo start --dev-client --clear",
     "android": "expo run:android",
@@ -17,6 +19,9 @@
     "run:ios": "expo run:ios",
     "run:ios:device": "expo run:ios --device",
     "build:dev:ios": "expo run:ios --device",
+    "build:dev:ios:device": "expo run:ios --device 00008110-001C29C011D9A01E --no-bundler",
+    "dev:ios": "expo run:ios --device 00008110-001C29C011D9A01E",
+    "open:ios:device": "bash scripts/open-ios-device.sh",
     "build:dev:ios:sim": "REACT_NATIVE_PACKAGER_HOSTNAME=127.0.0.1 expo run:ios --device 9854EA71-D57B-42F5-BC91-27F5F67617AC",
     "build:dev:ios:cloud": "eas build --profile development --platform ios",
     "build:dev:android": "expo run:android --device",
@@ -24,6 +29,7 @@
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-ml-kit/image-labeling": "^2.0.0",
     "@supabase/supabase-js": "^2.106.2",
     "dotenv": "^17.4.2",
     "expo": "~54.0.33",
@@ -57,6 +63,7 @@
     "react-native-view-shot": "4.0.3"
   },
   "devDependencies": {
+    "@expo/ngrok": "^4.1.3",
     "@types/react": "~19.1.0",
     "babel-plugin-module-resolver": "^5.0.3",
     "typescript": "~5.9.2"

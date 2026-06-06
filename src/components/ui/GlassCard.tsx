@@ -1,6 +1,6 @@
-import { colors, radii, shadow } from '@/theme/tokens';
+import { borders, colors, radii, shadow } from '@/theme/tokens';
 import * as React from 'react';
-import { Platform, Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
 
 type GlassCardProps = {
   children: React.ReactNode;
@@ -33,18 +33,18 @@ export function GlassCard({ children, onPress, style, highlighted }: GlassCardPr
 const styles = StyleSheet.create({
   card: {
     borderRadius: radii.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: borders.thin,
     borderColor: colors.border,
     backgroundColor: colors.surfaceSolid,
-    padding: 14,
+    padding: 16,
     ...shadow.card,
   },
   cardHighlighted: {
     borderColor: colors.borderStrong,
-    backgroundColor: '#1a2438',
+    backgroundColor: colors.surface,
   },
   pressed: {
-    transform: [{ scale: 0.985 }],
+    transform: [{ scale: 0.99 }],
     backgroundColor: colors.surfaceHoverSolid,
   },
 });

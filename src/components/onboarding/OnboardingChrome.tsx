@@ -1,4 +1,4 @@
-import { colors, radii, shadow, typography } from '@/theme/tokens';
+import { borders, colors, radii, shadow, typography } from '@/theme/tokens';
 import * as React from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -21,7 +21,6 @@ export function OnboardingPrimaryButton({
 }) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.primary, pressed && styles.pressed]}>
-      <View style={styles.primaryShine} />
       <Text style={styles.primaryLabel}>{label}</Text>
     </Pressable>
   );
@@ -38,35 +37,26 @@ export function OnboardingGhostButton({ label, onPress }: { label: string; onPre
 const styles = StyleSheet.create({
   progressRow: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 8,
     alignSelf: 'center',
   },
   progressSeg: {
     height: 4,
-    width: 28,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    width: 24,
+    borderRadius: radii.pill,
+    backgroundColor: colors.border,
   },
   progressSegActive: {
-    backgroundColor: colors.accent,
-    width: 40,
+    backgroundColor: colors.ink,
+    width: 36,
   },
   primary: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.ink,
     paddingVertical: 17,
     borderRadius: radii.pill,
     alignItems: 'center',
-    overflow: 'hidden',
     ...shadow.floating,
     ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : {}),
-  },
-  primaryShine: {
-    position: 'absolute',
-    top: 0,
-    left: 24,
-    right: 24,
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.35)',
   },
   primaryLabel: {
     ...typography.button,
@@ -84,6 +74,6 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.92,
-    transform: [{ scale: 0.985 }],
+    transform: [{ scale: 0.99 }],
   },
 });

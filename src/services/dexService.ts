@@ -3,7 +3,6 @@ import type { PigeonEntry } from '@/types/collection';
 export type DexEntry = {
   breed: string;
   count: number;
-  latestNickname: string;
   firstScannedAt: string;
   sampleImageUri: string;
 };
@@ -18,14 +17,12 @@ export function buildDex(entries: PigeonEntry[]): DexEntry[] {
       map.set(entry.breed, {
         breed: entry.breed,
         count: 1,
-        latestNickname: entry.nickname,
         firstScannedAt: entry.scannedAt,
         sampleImageUri: entry.imageUri,
       });
       continue;
     }
     existing.count += 1;
-    existing.latestNickname = entry.nickname;
     if (new Date(entry.scannedAt) < new Date(existing.firstScannedAt)) {
       existing.firstScannedAt = entry.scannedAt;
       existing.sampleImageUri = entry.imageUri;

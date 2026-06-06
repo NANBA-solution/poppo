@@ -1,28 +1,13 @@
-import { getPigeonCollection } from '@/services/collectionService';
+import { getPigeonCollection, computeCollectionStats } from '@/services/collectionService';
 import { AppIcon } from '@/components/icons/AppIcon';
-import {
-  DEFAULT_AVATAR_ID,
-  getAvatarName,
-  getAvatarSkin,
-  getAvatarSkins,
-  getSelectedAvatarId,
-  getUnlockedAvatarIds,
-  setSelectedAvatarId,
-} from '@/services/avatarService';
-import {
-  DEFAULT_DISPLAY_NAME,
-  getMyProfile,
-  isAuthCloudEnabled,
-  syncProfile,
-  updateDisplayName,
-} from '@/services/authService';
 import { Screen } from '@/components/ui/Screen';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { formatMessage } from '@/i18n/format';
 import { useI18n } from '@/i18n/I18nProvider';
-import { colors } from '@/theme/tokens';
+import { borders, colors } from '@/theme/tokens';
 import { formatShortDateTime } from '@/utils/formatDate';
 import { getPlayerTitle } from '@/services/titleService';
+import { getDexCompletion } from '@/services/dexService';
 import type { PigeonEntry } from '@/types/collection';
 import { hapticLight } from '@/utils/haptics';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -49,11 +34,7 @@ function filterAndSort(
 ): PigeonEntry[] {
   const q = query.trim().toLowerCase();
   let list = q
-    ? entries.filter(
-        (entry) =>
-          entry.breed.toLowerCase().includes(q) ||
-          entry.nickname.toLowerCase().includes(q),
-      )
+    ? entries.filter((entry) => entry.breed.toLowerCase().includes(q))
     : [...entries];
 
   if (sort === 'oldest') {
@@ -82,49 +63,15 @@ export default function ProfileScreen() {
   const [refreshing, setRefreshing] = React.useState(false);
   const [query, setQuery] = React.useState('');
   const [sort, setSort] = React.useState<SortMode>('newest');
-  const [selectedAvatarId, setSelectedAvatarIdState] = React.useState(DEFAULT_AVATAR_ID);
-  const [displayName, setDisplayName] = React.useState(DEFAULT_DISPLAY_NAME);
-  const [savingName, setSavingName] = React.useState(false);
-  const [bestPoppoWins, setBestPoppoWins] = React.useState(0);
-  const [avatarExpanded, setAvatarExpanded] = React.useState(false);
 
   const loadEntries = React.useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     const data = await getPigeonCollection();
     setEntries(data);
-    const selected = await getSelectedAvatarId(data);
-    setSelectedAvatarIdState(selected);
-    if (isAuthCloudEnabled()) {
-      const profile = await getMyProfile();
-      if (profile) {
-        setDisplayName(profile.displayName);
-        setBestPoppoWins(profile.bestPoppoWins);
-      }
-    }
     setLoading(false);
     setRefreshing(false);
   }, []);
-
-  const onSaveDisplayName = React.useCallback(async () => {
-    if (!isAuthCloudEnabled() || savingName) return;
-    const trimmed = displayName.trim();
-    if (!trimmed) {
-      setDisplayName(DEFAULT_DISPLAY_NAME);
-      return;
-    }
-    try {
-      setSavingName(true);
-      await updateDisplayName(trimmed);
-      setDisplayName(trimmed);
-      void hapticLight();
-    } catch {
-      const profile = await getMyProfile();
-      if (profile) setDisplayName(profile.displayName);
-    } finally {
-      setSavingName(false);
-    }
-  }, [displayName, savingName]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -141,87 +88,46 @@ export default function ProfileScreen() {
     });
   }, []);
 
-  const playerTitle = getPlayerTitle(entries.length, bestPoppoWins, t);
-  const unlockedAvatarIds = React.useMemo(() => getUnlockedAvatarIds(entries), [entries]);
-  const lockedAvatarCount = getAvatarSkins().length - unlockedAvatarIds.size;
-  const selectedAvatar = getAvatarSkin(selectedAvatarId);
+  const stats = React.useMemo(() => computeCollectionStats(entries), [entries]);
+  const dexCompletion = React.useMemo(() => getDexCompletion(entries), [entries]);
+  const playerTitle = getPlayerTitle(entries.length, t);
   const visibleEntries = React.useMemo(
     () => filterAndSort(entries, query, sort),
     [entries, query, sort],
   );
-
-  const onSelectAvatar = React.useCallback(
-    async (id: string) => {
-      if (!unlockedAvatarIds.has(id) || id === selectedAvatarId) return;
-      void hapticLight();
-      setSelectedAvatarIdState(id);
-      await setSelectedAvatarId(id);
-      if (isAuthCloudEnabled()) {
-        await syncProfile(id);
-      }
-    },
-    [selectedAvatarId, unlockedAvatarIds],
-  );
-
-  const onToggleAvatarPicker = React.useCallback(() => {
-    void hapticLight();
-    setAvatarExpanded((open) => !open);
-  }, []);
-
   const listHeader = (
     <>
       <View style={styles.hero}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={avatarExpanded ? t.profile.avatarCollapse : t.profile.avatarChange}
-          onPress={onToggleAvatarPicker}
-          style={({ pressed }) => [styles.avatarRing, pressed && styles.pressed]}
-        >
-          <Image source={selectedAvatar.image} style={styles.avatarImage} />
-        </Pressable>
+        <View style={styles.iconRing}>
+          <Image
+            source={require('../assets/brand-icon.png')}
+            style={styles.brandIcon}
+            resizeMode="cover"
+          />
+        </View>
         <Text style={styles.stageLabel}>{playerTitle.title}</Text>
-        <Text style={styles.countLabel}>
-          {entries.length} {t.profile.scans}
-        </Text>
-        <Text style={styles.avatarName}>{getAvatarName(selectedAvatarId, t)}</Text>
-        {!avatarExpanded && (
-          <Pressable
-            accessibilityRole="button"
-            onPress={onToggleAvatarPicker}
-            style={({ pressed }) => [styles.avatarToggleBtn, pressed && styles.pressed]}
-          >
-            <Text style={styles.avatarToggleLabel}>{t.profile.avatarChange}</Text>
-            {lockedAvatarCount > 0 && (
-              <Text style={styles.avatarToggleHint}>
-                {formatMessage(t.profile.avatarLockedCount, { count: lockedAvatarCount })}
-              </Text>
-            )}
-            <AppIcon name="chevron-right" size={16} color={colors.textMuted} />
-          </Pressable>
-        )}
+        <Text style={styles.subtitleLabel}>{playerTitle.subtitle}</Text>
+        {playerTitle.progressLabel ? (
+          <Text style={styles.progressLabel}>{playerTitle.progressLabel}</Text>
+        ) : null}
       </View>
 
-      {isAuthCloudEnabled() && (
-        <View style={styles.displayNameSection}>
-          <Text style={styles.displayNameLabel}>{t.profile.feedName}</Text>
-          <View style={styles.displayNameRow}>
-            <TextInput
-              value={displayName}
-              onChangeText={setDisplayName}
-              onEndEditing={() => void onSaveDisplayName()}
-              onSubmitEditing={() => void onSaveDisplayName()}
-              maxLength={20}
-              placeholder={DEFAULT_DISPLAY_NAME}
-              placeholderTextColor="rgba(201,214,238,0.35)"
-              style={styles.displayNameInput}
-              returnKeyType="done"
-              editable={!savingName}
-            />
-            {savingName && <ActivityIndicator size="small" color={colors.accent} />}
-          </View>
-          <Text style={styles.displayNameHint}>{t.profile.feedNameHint}</Text>
+      <View style={styles.statsRow}>
+        <View style={styles.statChip}>
+          <Text style={styles.statValue}>{stats.total}</Text>
+          <Text style={styles.statLabel}>{t.profile.totalScans}</Text>
         </View>
-      )}
+        <View style={styles.statChip}>
+          <Text style={styles.statValue}>{stats.uniqueBreeds}</Text>
+          <Text style={styles.statLabel}>{t.profile.breedCount}</Text>
+        </View>
+        <View style={styles.statChip}>
+          <Text style={styles.statValue}>
+            {dexCompletion.discovered}/{dexCompletion.goal}
+          </Text>
+          <Text style={styles.statLabel}>{t.profile.dex}</Text>
+        </View>
+      </View>
 
       <View style={styles.quickNav}>
         <Pressable
@@ -229,7 +135,7 @@ export default function ProfileScreen() {
           onPress={() => router.push('/dex')}
           style={({ pressed }) => [styles.quickNavBtn, pressed && styles.pressed]}
         >
-          <AppIcon name="book" size={16} color={colors.accent} />
+          <AppIcon name="book" size={18} color={colors.accent} />
           <Text style={styles.quickNavLabel}>{t.profile.dex}</Text>
         </Pressable>
         <Pressable
@@ -237,89 +143,31 @@ export default function ProfileScreen() {
           onPress={() => router.push('/quests')}
           style={({ pressed }) => [styles.quickNavBtn, pressed && styles.pressed]}
         >
-          <AppIcon name="target" size={16} color={colors.accent} />
+          <AppIcon name="target" size={18} color={colors.accent} />
           <Text style={styles.quickNavLabel}>{t.profile.quests}</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push('/feed')}
-          style={({ pressed }) => [styles.quickNavBtn, pressed && styles.pressed]}
-        >
-          <AppIcon name="feed" size={16} color={colors.accent} />
-          <Text style={styles.quickNavLabel}>{t.profile.feed}</Text>
         </Pressable>
       </View>
 
-      {avatarExpanded && (
-        <View style={styles.avatarPickerSection}>
-          <View style={styles.avatarPickerHeader}>
-            <Text style={styles.avatarPickerTitle}>{t.profile.avatarChange}</Text>
-            <Pressable
-              accessibilityRole="button"
-              onPress={onToggleAvatarPicker}
-              style={({ pressed }) => [styles.avatarCollapseBtn, pressed && styles.pressed]}
-            >
-              <Text style={styles.avatarCollapseLabel}>{t.profile.avatarCollapse}</Text>
-            </Pressable>
-          </View>
-          <View style={styles.avatarPicker}>
-            {getAvatarSkins().map((skin) => {
-              const unlocked = unlockedAvatarIds.has(skin.id);
-              const selected = selectedAvatarId === skin.id;
-              return (
-                <Pressable
-                  key={skin.id}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${getAvatarName(skin.id, t)}${unlocked ? '' : ` ${t.common.locked}`}`}
-                  onPress={() => void onSelectAvatar(skin.id)}
-                  disabled={!unlocked}
-                  style={({ pressed }) => [
-                    styles.avatarChip,
-                    selected && styles.avatarChipSelected,
-                    !unlocked && styles.avatarChipLocked,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Image source={skin.image} style={styles.avatarChipImage} />
-                  <Text
-                    style={[
-                      styles.avatarChipName,
-                      !unlocked && styles.avatarChipNameLocked,
-                      selected && styles.avatarChipNameSelected,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {getAvatarName(skin.id, t)}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-      )}
-
       {entries.length > 0 && (
-        <>
-          <View style={styles.tools}>
-            <TextInput
-              value={query}
-              onChangeText={setQuery}
-              placeholder={t.profile.searchPlaceholder}
-              placeholderTextColor={colors.textMuted}
-              style={styles.searchInput}
-              clearButtonMode="while-editing"
-              accessibilityLabel={t.profile.searchPlaceholder}
-            />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`${sortLabels[sort]}`}
-              onPress={cycleSort}
-              style={({ pressed }) => [styles.sortBtn, pressed && styles.pressed]}
-            >
-              <Text style={styles.sortBtnLabel}>{sortLabels[sort]}</Text>
-            </Pressable>
-          </View>
-        </>
+        <View style={styles.tools}>
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder={t.profile.searchPlaceholder}
+            placeholderTextColor={colors.textMuted}
+            style={styles.searchInput}
+            clearButtonMode="while-editing"
+            accessibilityLabel={t.profile.searchPlaceholder}
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${sortLabels[sort]}`}
+            onPress={cycleSort}
+            style={({ pressed }) => [styles.sortBtn, pressed && styles.pressed]}
+          >
+            <Text style={styles.sortBtnLabel}>{sortLabels[sort]}</Text>
+          </Pressable>
+        </View>
       )}
     </>
   );
@@ -352,6 +200,14 @@ export default function ProfileScreen() {
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>{t.profile.emptyTitle}</Text>
             <Text style={styles.emptyBody}>{t.profile.emptyBody}</Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.replace('/camera')}
+              style={({ pressed }) => [styles.scanBtn, pressed && styles.pressed]}
+            >
+              <AppIcon name="camera" size={18} color={colors.onAccent} />
+              <Text style={styles.scanBtnLabel}>{t.profile.scanCta}</Text>
+            </Pressable>
           </View>
         </>
       ) : (
@@ -377,14 +233,13 @@ export default function ProfileScreen() {
           renderItem={({ item }) => (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`${item.breed}、${item.nickname}`}
+              accessibilityLabel={item.breed}
               onPress={() => router.push({ pathname: '/entry/[id]', params: { id: item.id } })}
               style={({ pressed }) => [styles.card, pressed && styles.pressed]}
             >
               <Image source={{ uri: item.imageUri }} style={styles.thumb} />
               <View style={styles.cardBody}>
                 <Text style={styles.cardBreed}>{item.breed}</Text>
-                <Text style={styles.cardNickname}>{item.nickname}</Text>
                 <Text style={styles.cardDate}>
                   {formatShortDateTime(item.scannedAt, locale)}
                 </Text>
@@ -405,195 +260,111 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingLeft: 12,
   },
-  settingsLabel: {
-    fontSize: 20,
-  },
   pressed: {
     opacity: 0.85,
   },
   hero: {
     alignItems: 'center',
     paddingVertical: 20,
-    gap: 6,
+    gap: 4,
   },
-  avatarRing: {
+  iconRing: {
     width: 108,
     height: 108,
     borderRadius: 54,
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: colors.borderStrong,
+    backgroundColor: colors.surfaceSolid,
+    borderWidth: borders.thin,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
     overflow: 'hidden',
+    shadowColor: '#1A1A1A',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 4,
   },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
+  brandIcon: {
+    width: 108,
+    height: 108,
+    borderRadius: 54,
   },
   stageLabel: {
     color: colors.accent,
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
-  countLabel: {
-    color: 'rgba(244,247,250,0.65)',
-    fontSize: 13,
-  },
-  avatarName: {
-    color: colors.gold,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  avatarToggleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 4,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 999,
-    backgroundColor: colors.accentSoft,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderStrong,
-  },
-  avatarToggleLabel: {
-    color: colors.accent,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  avatarToggleHint: {
-    color: 'rgba(201,214,238,0.45)',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  avatarPickerSection: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    gap: 8,
-  },
-  avatarPickerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  avatarPickerTitle: {
-    color: 'rgba(201,214,238,0.75)',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  avatarCollapseBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-  },
-  avatarCollapseLabel: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  displayNameSection: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    gap: 6,
-  },
-  displayNameLabel: {
-    color: 'rgba(201,214,238,0.7)',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  displayNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  displayNameInput: {
-    flex: 1,
-    color: colors.text,
     fontSize: 16,
-    fontWeight: '700',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    backgroundColor: colors.accentSoft,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderStrong,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
-  displayNameHint: {
-    color: 'rgba(201,214,238,0.45)',
-    fontSize: 11,
+  subtitleLabel: {
+    color: colors.textMuted,
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  progressLabel: {
+    color: colors.gold,
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  statChip: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceSolid,
+    borderWidth: borders.thin,
+    borderColor: colors.border,
+    gap: 2,
+    shadowColor: '#1A1A1A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+  statValue: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  statLabel: {
+    color: colors.textMuted,
+    fontSize: 10,
+    fontWeight: '700',
   },
   quickNav: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
     paddingHorizontal: 16,
     paddingBottom: 12,
   },
   quickNavBtn: {
     flex: 1,
-    minWidth: '30%',
-    paddingVertical: 12,
-    borderRadius: 12,
+    paddingVertical: 14,
+    borderRadius: 16,
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 6,
-    backgroundColor: colors.accentSoft,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderStrong,
+    gap: 8,
+    backgroundColor: colors.surfaceSolid,
+    borderWidth: borders.thin,
+    borderColor: colors.border,
+    shadowColor: '#1A1A1A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 1,
   },
   quickNavLabel: {
     color: colors.accent,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
-  },
-  avatarPicker: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  avatarChip: {
-    width: '48%',
-    minWidth: 150,
-    flexGrow: 1,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderStrong,
-    backgroundColor: colors.accentSoft,
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    alignItems: 'center',
-    gap: 6,
-  },
-  avatarChipImage: {
-    width: 72,
-    height: 72,
-    borderRadius: 10,
-    backgroundColor: '#fff',
-    resizeMode: 'cover',
-  },
-  avatarChipSelected: {
-    borderColor: 'rgba(255,217,138,0.8)',
-    backgroundColor: 'rgba(255,217,138,0.12)',
-  },
-  avatarChipLocked: {
-    opacity: 0.45,
-  },
-  avatarChipName: {
-    color: colors.accent,
-    fontSize: 11,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  avatarChipNameSelected: {
-    color: colors.gold,
-  },
-  avatarChipNameLocked: {
-    color: 'rgba(201,214,238,0.7)',
-  },
-  avatarChipHint: {
-    color: 'rgba(201,214,238,0.65)',
-    fontSize: 9,
-    textAlign: 'center',
   },
   tools: {
     paddingHorizontal: 16,
@@ -601,10 +372,10 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   searchInput: {
-    backgroundColor: 'rgba(13,17,26,0.92)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 12,
+    backgroundColor: colors.surfaceSolid,
+    borderWidth: borders.thin,
+    borderColor: colors.border,
+    borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 12,
     color: colors.text,
@@ -633,7 +404,8 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     paddingHorizontal: 32,
-    gap: 8,
+    gap: 12,
+    alignItems: 'center',
   },
   emptyTitle: {
     color: colors.text,
@@ -642,13 +414,28 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   emptyBody: {
-    color: 'rgba(244,247,250,0.65)',
+    color: colors.textMuted,
     fontSize: 14,
     lineHeight: 21,
     textAlign: 'center',
   },
+  scanBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 999,
+    backgroundColor: colors.accent,
+  },
+  scanBtnLabel: {
+    color: colors.onAccent,
+    fontSize: 15,
+    fontWeight: '800',
+  },
   noMatch: {
-    color: 'rgba(244,247,250,0.55)',
+    color: colors.textMuted,
     fontSize: 14,
     textAlign: 'center',
     paddingVertical: 24,
@@ -665,10 +452,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     padding: 12,
-    borderRadius: 14,
-    backgroundColor: 'rgba(13,17,26,0.92)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 18,
+    backgroundColor: colors.surfaceSolid,
+    borderWidth: borders.thin,
+    borderColor: colors.border,
+    shadowColor: '#1A1A1A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 1,
   },
   thumb: {
     width: 72,
@@ -686,19 +478,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
   },
-  cardNickname: {
-    color: 'rgba(244,247,250,0.88)',
-    fontSize: 14,
-    lineHeight: 19,
-  },
   cardDate: {
-    color: 'rgba(201,214,238,0.55)',
+    color: colors.textMuted,
     fontSize: 12,
-  },
-  chevron: {
-    color: 'rgba(201,214,238,0.45)',
-    fontSize: 24,
-    fontWeight: '300',
-    paddingLeft: 4,
   },
 });

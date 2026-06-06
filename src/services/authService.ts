@@ -4,17 +4,10 @@ import { Platform } from 'react-native';
 
 import { getSupabase } from '@/lib/supabase';
 import { isSupabaseConfigured } from '@/lib/supabaseConfig';
-import { DEFAULT_AVATAR_ID } from '@/services/avatarService';
 
-export const DEFAULT_DISPLAY_NAME = 'ぽっぽ野郎';
+const DEFAULT_DISPLAY_NAME = 'ぽっぽ野郎';
 
 let initPromise: Promise<Session | null> | null = null;
-
-export type UserProfile = {
-  displayName: string;
-  avatarId: string;
-  bestPoppoWins: number;
-};
 
 export type AuthProviderType = 'signed_out' | 'anonymous' | 'apple' | 'other';
 
@@ -54,70 +47,17 @@ export async function getCurrentUserId(): Promise<string | null> {
   return data.session?.user.id ?? null;
 }
 
-export async function getMyProfile(): Promise<UserProfile | null> {
-  const supabase = getSupabase();
-  const userId = await getCurrentUserId();
-  if (!supabase || !userId) return null;
-
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('display_name, avatar_id, best_poppo_wins')
-    .eq('id', userId)
-    .maybeSingle();
-
-  if (error || !data) {
-    return {
-      displayName: DEFAULT_DISPLAY_NAME,
-      avatarId: DEFAULT_AVATAR_ID,
-      bestPoppoWins: 0,
-    };
-  }
-
-  return {
-    displayName: data.display_name?.trim() || DEFAULT_DISPLAY_NAME,
-    avatarId: data.avatar_id?.trim() || DEFAULT_AVATAR_ID,
-    bestPoppoWins: Number(data.best_poppo_wins ?? 0),
-  };
-}
-
-export async function updateDisplayName(displayName: string): Promise<void> {
-  const trimmed = displayName.trim().slice(0, 20);
-  if (!trimmed) throw new Error('表示名を入力してください');
-
-  const supabase = getSupabase();
-  const userId = await getCurrentUserId();
-  if (!supabase || !userId) throw new Error('クラウドに未接続です');
-
-  const profile = await getMyProfile();
-  const { error } = await supabase.from('profiles').upsert(
-    {
-      id: userId,
-      display_name: trimmed,
-      avatar_id: profile?.avatarId ?? DEFAULT_AVATAR_ID,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'id' },
-  );
-
-  if (error) throw new Error(error.message);
-}
-
-export async function syncProfile(avatarId: string, displayName?: string): Promise<void> {
+async function ensureProfileRow(displayName?: string): Promise<void> {
   const supabase = getSupabase();
   const userId = await getCurrentUserId();
   if (!supabase || !userId) return;
 
-  let name = displayName?.trim();
-  if (!name) {
-    const current = await getMyProfile();
-    name = current?.displayName ?? DEFAULT_DISPLAY_NAME;
-  }
+  const name = displayName?.trim().slice(0, 20) || DEFAULT_DISPLAY_NAME;
 
   const { error } = await supabase.from('profiles').upsert(
     {
       id: userId,
       display_name: name,
-      avatar_id: avatarId || DEFAULT_AVATAR_ID,
       updated_at: new Date().toISOString(),
     },
     { onConflict: 'id' },
@@ -207,9 +147,7 @@ export async function signInWithAppleAndMigrate(): Promise<void> {
     }
   }
 
-  const appleName = displayNameFromApple(credential);
-  const profile = await getMyProfile();
-  await syncProfile(profile?.avatarId ?? DEFAULT_AVATAR_ID, appleName ?? profile?.displayName);
+  await ensureProfileRow(displayNameFromApple(credential));
 }
 
 export async function getAuthProviderType(): Promise<AuthProviderType> {

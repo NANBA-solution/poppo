@@ -4,6 +4,7 @@ import {
   OnboardingProgress,
 } from '@/components/onboarding/OnboardingChrome';
 import { OnboardingHero } from '@/components/onboarding/OnboardingHero';
+import { LanguagePills } from '@/components/ui/LanguagePills';
 import { Screen } from '@/components/ui/Screen';
 import { useI18n } from '@/i18n/I18nProvider';
 import { completeOnboarding } from '@/services/onboardingService';
@@ -12,7 +13,7 @@ import { hapticLight } from '@/utils/haptics';
 import type { OnboardingScene } from '@/constants/onboardingIllustrations';
 import { useRouter } from 'expo-router';
 import * as React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type StepDef = {
@@ -52,19 +53,19 @@ export default function OnboardingScreen() {
     [t],
   );
 
-  const goAuth = React.useCallback(async () => {
+  const goCamera = React.useCallback(async () => {
     await completeOnboarding();
-    router.replace('/auth');
+    router.replace('/camera');
   }, [router]);
 
   const onNext = React.useCallback(async () => {
     void hapticLight();
     if (step >= steps.length - 1) {
-      await goAuth();
+      await goCamera();
       return;
     }
     setStep((s) => s + 1);
-  }, [goAuth, step, steps.length]);
+  }, [goCamera, step, steps.length]);
 
   const current = steps[step];
 
@@ -77,15 +78,22 @@ export default function OnboardingScreen() {
         ]}
       >
         <View style={styles.topBar}>
-          <View>
-            <Text style={styles.brand}>{t.onboarding.appName}</Text>
-            <Text style={styles.tagline}>{t.onboarding.tagline}</Text>
+          <View style={styles.brandRow}>
+            <Image source={require('../assets/brand-icon.png')} style={styles.brandIcon} />
+            <View style={styles.brandCopy}>
+              <Text style={styles.brand}>POPPO</Text>
+              <Text style={styles.brandJa}>{t.onboarding.appName}</Text>
+              <Text style={styles.tagline}>{t.onboarding.tagline}</Text>
+            </View>
           </View>
-          <OnboardingGhostButton label={t.common.skip} onPress={goAuth} />
+          <View style={styles.topActions}>
+            <LanguagePills compact />
+            <OnboardingGhostButton label={t.common.skip} onPress={goCamera} />
+          </View>
         </View>
 
         <View key={current.scene} style={styles.heroWrap}>
-          <OnboardingHero scene={current.scene} accentColor={colors.accent} />
+          <OnboardingHero scene={current.scene} />
         </View>
 
         <View key={`copy-${step}`} style={styles.copyBlock}>
@@ -100,9 +108,6 @@ export default function OnboardingScreen() {
             label={step >= steps.length - 1 ? t.common.start : t.common.next}
             onPress={onNext}
           />
-          {step >= steps.length - 1 ? (
-            <Text style={styles.footerHint}>{t.auth.footnote}</Text>
-          ) : null}
         </View>
       </View>
     </Screen>
@@ -121,11 +126,38 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
   },
+  topActions: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+    minWidth: 0,
+  },
+  brandCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  brandIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   brand: {
     color: colors.text,
-    fontSize: 22,
-    fontWeight: '900',
-    letterSpacing: -0.3,
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  brandJa: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '800',
   },
   tagline: {
     color: colors.textMuted,
@@ -136,7 +168,8 @@ const styles = StyleSheet.create({
   heroWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 300,
+    minHeight: 240,
+    paddingVertical: 8,
   },
   copyBlock: {
     gap: 10,
@@ -165,12 +198,5 @@ const styles = StyleSheet.create({
   footer: {
     gap: 16,
     paddingTop: 8,
-  },
-  footerHint: {
-    color: colors.textMuted,
-    fontSize: 12,
-    lineHeight: 18,
-    textAlign: 'center',
-    opacity: 0.85,
   },
 });

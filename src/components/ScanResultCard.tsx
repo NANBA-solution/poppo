@@ -1,13 +1,13 @@
 import { useI18n } from '@/i18n/I18nProvider';
-import { colors, radii } from '@/theme/tokens';
+import { borders, colors, radii, shadow } from '@/theme/tokens';
 import * as React from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 type ScanResultCardProps = {
   phase: 'loading' | 'success' | 'error';
   breed?: string;
-  nickname?: string;
   error?: string | null;
+  errorTitle?: string;
   subtitle?: string;
   showEyebrow?: boolean;
 };
@@ -15,8 +15,8 @@ type ScanResultCardProps = {
 export function ScanResultCard({
   phase,
   breed,
-  nickname,
   error,
+  errorTitle,
   subtitle,
   showEyebrow = true,
 }: ScanResultCardProps) {
@@ -25,19 +25,20 @@ export function ScanResultCard({
   if (phase === 'loading') {
     return (
       <View style={[styles.card, styles.cardRow]}>
-        <ActivityIndicator color={colors.accent} />
-        <Text style={styles.cardHint}>{t.scan.loading}</Text>
+        <ActivityIndicator color={colors.ink} />
+        <Text style={styles.cardHint}>{t.scan.recognizing}</Text>
       </View>
     );
   }
 
-  if (phase === 'success' && breed && nickname) {
+  if (phase === 'success') {
     return (
       <View style={styles.card}>
         {showEyebrow ? <Text style={styles.cardEyebrow}>{t.scan.eyebrow}</Text> : null}
-        <Text style={styles.cardBreed}>{breed}</Text>
-        <Text style={styles.cardNickname}>{nickname}</Text>
-        {subtitle ? <Text style={styles.cardSubtitle}>{subtitle}</Text> : null}
+        {breed ? <Text style={styles.cardBreed}>{breed}</Text> : null}
+        <Text style={breed ? styles.cardSubtitle : styles.cardBreed}>
+          {subtitle ?? t.scan.saved}
+        </Text>
       </View>
     );
   }
@@ -45,7 +46,7 @@ export function ScanResultCard({
   if (phase === 'error') {
     return (
       <View style={[styles.card, styles.cardError]}>
-        <Text style={styles.cardErrorTitle}>{t.scan.errorTitle}</Text>
+        <Text style={styles.cardErrorTitle}>{errorTitle ?? t.scan.errorTitle}</Text>
         <Text style={styles.cardErrorBody}>{error ?? t.scan.errorFallback}</Text>
       </View>
     );
@@ -57,11 +58,12 @@ export function ScanResultCard({
 const styles = StyleSheet.create({
   card: {
     borderRadius: radii.lg,
-    padding: 16,
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
+    padding: 18,
+    backgroundColor: colors.surfaceSolid,
+    borderWidth: borders.thin,
     borderColor: colors.border,
     gap: 6,
+    ...shadow.card,
   },
   cardRow: {
     flexDirection: 'row',
@@ -72,39 +74,34 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.text,
     fontSize: 14,
-    fontWeight: '600',
-    opacity: 0.85,
+    fontWeight: '700',
   },
   cardEyebrow: {
     color: colors.textMuted,
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: '900',
     letterSpacing: 3,
   },
   cardBreed: {
     color: colors.text,
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  cardNickname: {
-    color: colors.text,
-    fontSize: 16,
-    lineHeight: 22,
-    fontWeight: '600',
-    opacity: 0.92,
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: -0.2,
   },
   cardSubtitle: {
     color: colors.textMuted,
     fontSize: 12,
     marginTop: 4,
+    fontWeight: '600',
   },
   cardError: {
-    borderColor: 'rgba(255,120,120,0.35)',
+    borderColor: colors.danger,
+    backgroundColor: colors.dangerSoft,
   },
   cardErrorTitle: {
     color: colors.danger,
     fontSize: 15,
-    fontWeight: '800',
+    fontWeight: '900',
   },
   cardErrorBody: {
     color: colors.textMuted,

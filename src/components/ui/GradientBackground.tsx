@@ -6,41 +6,42 @@ type GradientBackgroundProps = {
   style?: ViewStyle;
 };
 
-/** ネイティブ LinearGradient に依存せず、単色レイヤーでグラデーションを再現 */
+/** アイコン準拠のクリーム背景 + ソフトグロー */
 export function GradientBackground({ style }: GradientBackgroundProps) {
   return (
-    <View style={[styles.fallback, style]}>
-      <View style={styles.fallbackTop} />
-      <View style={styles.fallbackBottom} />
+    <View style={[styles.root, style]} pointerEvents="none">
+      <View style={styles.glowPrimary} />
+      <View style={styles.glowSecondary} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  fallback: {
+  root: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.paper,
+    overflow: 'hidden',
   },
-  fallbackTop: {
+  glowPrimary: {
     position: 'absolute',
-    top: -80,
-    left: -40,
-    width: '120%',
-    height: '55%',
-    backgroundColor: '#1a1430',
-    opacity: 0.7,
-    borderBottomLeftRadius: 120,
-    borderBottomRightRadius: 120,
+    width: 320,
+    height: 320,
+    borderRadius: 160,
+    backgroundColor: colors.glow,
+    top: '18%',
+    alignSelf: 'center',
+    left: '50%',
+    marginLeft: -160,
+    opacity: 0.9,
   },
-  fallbackBottom: {
+  glowSecondary: {
     position: 'absolute',
-    left: -20,
-    right: -20,
-    bottom: -40,
-    height: '50%',
-    backgroundColor: '#120a1e',
-    opacity: 0.65,
-    borderTopLeftRadius: 100,
-    borderTopRightRadius: 100,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: '#FFFFFF',
+    bottom: '12%',
+    right: -40,
+    opacity: 0.55,
   },
 });

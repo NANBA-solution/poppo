@@ -1,45 +1,17 @@
+import CameraScreen from '@/screens/CameraScreen';
 import { colors } from '@/theme/tokens';
 import { isExpoCameraNativeAvailable } from '@/utils/nativeAvailability';
-import * as React from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-
-type CameraModule = { default: React.ComponentType };
+import { StyleSheet, Text, View } from 'react-native';
 
 export default function CameraRoute() {
-  const [Screen, setScreen] = React.useState<React.ComponentType | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    let active = true;
-
-    if (!isExpoCameraNativeAvailable()) {
-      setError(
-        'この開発ビルドにカメラ（expo-camera）が含まれていません。npm run build:dev:ios で作り直してください。',
-      );
-      return () => {
-        active = false;
-      };
-    }
-
-    void import('@/screens/CameraScreen')
-      .then((mod: CameraModule) => {
-        if (active) setScreen(() => mod.default);
-      })
-      .catch((e: unknown) => {
-        if (active) {
-          setError(e instanceof Error ? e.message : 'Camera module failed to load');
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  if (error) {
+  if (!isExpoCameraNativeAvailable()) {
     return (
       <View style={styles.centered}>
         <Text style={styles.errorTitle}>カメラを起動できません</Text>
-        <Text style={styles.errorBody}>{error}</Text>
+        <Text style={styles.errorBody}>
+          この開発ビルドにカメラ（expo-camera）が含まれていません。npm run build:dev:ios
+          で作り直してください。
+        </Text>
         <Text style={styles.errorHint}>
           開発ビルドを作り直してください: npm run build:dev:ios
         </Text>
@@ -47,16 +19,7 @@ export default function CameraRoute() {
     );
   }
 
-  if (!Screen) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={styles.loadingText}>カメラ起動中…</Text>
-      </View>
-    );
-  }
-
-  return <Screen />;
+  return <CameraScreen />;
 }
 
 const styles = StyleSheet.create({

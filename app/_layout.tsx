@@ -1,8 +1,6 @@
 import 'react-native-gesture-handler';
 
 import { I18nProvider } from '@/i18n/I18nProvider';
-import { ensureSupabaseSession } from '@/services/authService';
-import { isSupabaseConfigured } from '@/lib/supabaseConfig';
 import { colors } from '@/theme/tokens';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -21,12 +19,6 @@ function RootNavigator() {
     setBooting(false);
     void SplashScreen.hideAsync();
   }, []);
-
-  React.useEffect(() => {
-    if (booting) return;
-    if (!isSupabaseConfigured()) return;
-    void ensureSupabaseSession().catch(() => undefined);
-  }, [booting]);
 
   if (booting) {
     return (
@@ -52,7 +44,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <I18nProvider>
         <SafeAreaProvider>
-          <StatusBar style="light" />
+          <StatusBar style="dark" />
           <RootNavigator />
         </SafeAreaProvider>
       </I18nProvider>

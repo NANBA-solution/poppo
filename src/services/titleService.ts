@@ -8,46 +8,33 @@ export type PlayerTitle = {
   progressLabel: string | null;
 };
 
-const TIER_MINS = [0, 1, 3, 7, 15, 30] as const;
+/** スキャン数しきい値（tiers 配列の index と対応） */
+const TIER_MINS = [
+  0, 1, 2, 3, 5, 7, 10, 13, 15, 20, 25, 30, 42, 50, 69, 77, 88, 99, 100, 108, 130, 150,
+  200, 250, 300, 404, 500, 666, 777, 888, 999,
+] as const;
 
-function bestPoppoTitleKey(wins: number): keyof TranslationTree['titles']['best'] | null {
-  if (wins >= 30) return 'legend';
-  if (wins >= 10) return 'regular';
-  if (wins >= 3) return 'hunter';
-  if (wins >= 1) return 'once';
-  return null;
-}
-
-export function getPlayerTitle(
-  scanCount: number,
-  bestPoppoWins = 0,
-  t: TranslationTree,
-): PlayerTitle {
+export function getPlayerTitle(scanCount: number, t: TranslationTree): PlayerTitle {
   const tiers = t.titles.tiers;
   let tierIndex = 0;
-  for (let i = 0; i < TIER_MINS.length; i++) {
+  for (let i = 0; i < TIER_MINS.length; i += 1) {
     if (scanCount >= TIER_MINS[i]) tierIndex = i;
   }
 
-  const current = tiers[tierIndex];
+  const current = tiers[tierIndex] ?? tiers[tiers.length - 1]!;
   const next = tiers[tierIndex + 1] ?? null;
+  const nextMin = TIER_MINS[tierIndex + 1];
 
   const progressLabel =
-    next != null
+    next != null && nextMin != null
       ? formatMessage(t.titles.progressToNext, {
-          count: Math.max(0, TIER_MINS[tierIndex + 1] - scanCount),
+          count: Math.max(0, nextMin - scanCount),
         })
       : null;
 
-  const bestKey = bestPoppoTitleKey(bestPoppoWins);
-  const winnerTitle = bestKey ? t.titles.best[bestKey] : null;
-
   return {
-    title: winnerTitle ?? current.title,
-    subtitle:
-      winnerTitle != null
-        ? formatMessage(t.titles.bestWinsSubtitle, { count: bestPoppoWins })
-        : current.subtitle,
+    title: current.title,
+    subtitle: current.subtitle,
     nextTitle: next?.title ?? null,
     progressLabel,
   };

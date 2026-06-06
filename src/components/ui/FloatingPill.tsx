@@ -1,7 +1,16 @@
 import { AppIcon, type IconName } from '@/components/icons/AppIcon';
-import { colors, radii, shadow } from '@/theme/tokens';
+import { borders, colors, radii, shadow } from '@/theme/tokens';
 import * as React from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Image,
+  type ImageSourcePropType,
+  type ImageStyle,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 type FloatingPillProps = {
   label: string;
@@ -9,27 +18,65 @@ type FloatingPillProps = {
   active?: boolean;
   badge?: string | number;
   icon?: IconName;
+  imageIcon?: ImageSourcePropType;
+  /** カメラ上など暗い背景用 */
+  variant?: 'paper' | 'dark';
 };
 
-export function FloatingPill({ label, onPress, active, badge, icon }: FloatingPillProps) {
+export function FloatingPill({
+  label,
+  onPress,
+  active,
+  badge,
+  icon,
+  imageIcon,
+  variant = 'paper',
+}: FloatingPillProps) {
+  const isDark = variant === 'dark';
+
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.pill,
-        active && styles.pillActive,
+        isDark ? styles.pillDark : styles.pillPaper,
+        active && (isDark ? styles.pillDarkActive : styles.pillPaperActive),
         pressed && styles.pressed,
         Platform.OS === 'web' && styles.webHover,
       ]}
     >
-      {icon ? (
-        <AppIcon name={icon} size={18} color={active ? colors.accent : colors.text} />
+      {imageIcon ? (
+        <Image source={imageIcon} style={imageIconStyle} resizeMode="cover" />
+      ) : icon ? (
+        <AppIcon
+          name={icon}
+          size={18}
+          color={isDark ? colors.onAccent : active ? colors.ink : colors.ink}
+        />
       ) : null}
-      <Text style={[styles.label, active && styles.labelActive]}>{label}</Text>
-      {badge != null ? <Text style={styles.badge}>{badge}</Text> : null}
+      <Text
+        style={[
+          styles.label,
+          isDark ? styles.labelDark : styles.labelPaper,
+          active && !isDark && styles.labelActive,
+        ]}
+      >
+        {label}
+      </Text>
+      {badge != null ? (
+        <View style={[styles.badge, isDark && styles.badgeDark]}>
+          <Text style={[styles.badgeText, isDark && styles.badgeTextDark]}>{badge}</Text>
+        </View>
+      ) : null}
     </Pressable>
   );
 }
+
+const imageIconStyle: ImageStyle = {
+  width: 24,
+  height: 24,
+  borderRadius: 8,
+};
 
 const styles = StyleSheet.create({
   pill: {
@@ -39,39 +86,61 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: radii.pill,
-    backgroundColor: colors.pillSolid,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    ...shadow.floating,
+    borderWidth: borders.thin,
+    ...shadow.subtle,
     ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : {}),
   },
-  pillActive: {
-    borderColor: colors.borderStrong,
+  pillPaper: {
+    backgroundColor: colors.surfaceSolid,
+    borderColor: colors.border,
+  },
+  pillPaperActive: {
     backgroundColor: colors.accentSoft,
+    borderColor: colors.borderStrong,
+  },
+  pillDark: {
+    backgroundColor: 'rgba(26,26,26,0.88)',
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  pillDarkActive: {
+    backgroundColor: '#2A2A2A',
   },
   label: {
-    color: colors.text,
     fontSize: 14,
     fontWeight: '700',
   },
+  labelPaper: {
+    color: colors.ink,
+  },
+  labelDark: {
+    color: colors.onAccent,
+  },
   labelActive: {
-    color: colors.accent,
+    color: colors.ink,
   },
   badge: {
     minWidth: 20,
     height: 20,
     paddingHorizontal: 6,
     borderRadius: 10,
-    overflow: 'hidden',
-    textAlign: 'center',
-    textAlignVertical: 'center',
-    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.ink,
+  },
+  badgeDark: {
+    backgroundColor: colors.onAccent,
+  },
+  badgeText: {
     color: colors.onAccent,
     fontSize: 11,
     fontWeight: '800',
   },
+  badgeTextDark: {
+    color: colors.ink,
+  },
   pressed: {
-    transform: [{ scale: 0.97 }],
+    transform: [{ scale: 0.98 }],
+    opacity: 0.94,
   },
   webHover: {
     // @ts-expect-error web-only

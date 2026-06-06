@@ -2,7 +2,8 @@ import { ShareCaptureFrame } from '@/components/ShareCaptureFrame';
 import { ActionFooter, FooterButton } from '@/components/ui/ActionFooter';
 import { Screen } from '@/components/ui/Screen';
 import { useI18n } from '@/i18n/I18nProvider';
-import { analyzePigeonWithClaude, type PigeonScanJson } from '@/services/aiService';
+import { recognizePigeonLocally } from '@/services/pigeonDetectService';
+import { isNotPigeonError } from '@/types/scan';
 import { savePigeonScan } from '@/services/collectionService';
 import { colors } from '@/theme/tokens';
 import { hapticSuccess, hapticWarning } from '@/utils/haptics';
@@ -18,6 +19,8 @@ import {
 } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const PENDING_BREED = '未判定';
 
 function resolveUri(raw: string | string[] | undefined): string | undefined {
   if (raw == null) return undefined;
@@ -39,19 +42,19 @@ export default function ResultScreen() {
 
   const shareRef = React.useRef<View>(null);
   const [shareBusy, setShareBusy] = React.useState(false);
-  const [aiPhase, setAiPhase] = React.useState<'idle' | 'loading' | 'success' | 'error'>(
-    'idle',
-  );
-  const [aiResult, setAiResult] = React.useState<PigeonScanJson | null>(null);
-  const [aiError, setAiError] = React.useState<string | null>(null);
+  const [phase, setPhase] = React.useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [saveError, setSaveError] = React.useState<string | null>(null);
+  const [errorTitle, setErrorTitle] = React.useState<string | undefined>();
+  const [notPigeon, setNotPigeon] = React.useState(false);
   const [savedEntryId, setSavedEntryId] = React.useState<string | null>(null);
   const [retryKey, setRetryKey] = React.useState(0);
 
   React.useEffect(() => {
     if (!imageUri) {
-      setAiPhase('idle');
-      setAiResult(null);
-      setAiError(null);
+      setPhase('idle');
+      setSaveError(null);
+      setErrorTitle(undefined);
+      setNotPigeon(false);
       setSavedEntryId(null);
       return;
     }
@@ -59,32 +62,37 @@ export default function ResultScreen() {
     let cancelled = false;
 
     (async () => {
-      setAiPhase('loading');
-      setAiResult(null);
-      setAiError(null);
+      setPhase('loading');
+      setSaveError(null);
+      setErrorTitle(undefined);
+      setNotPigeon(false);
       setSavedEntryId(null);
       try {
-        const result = await analyzePigeonWithClaude(imageUri);
+        await recognizePigeonLocally(imageUri);
+        const entry = await savePigeonScan(imageUri, {
+          isPigeon: true,
+          breed: PENDING_BREED,
+        });
         if (!cancelled) {
-          setAiResult(result);
-          setAiPhase('success');
+          setSavedEntryId(entry.id);
+          setPhase('success');
           void hapticSuccess();
-          try {
-            const entry = await savePigeonScan(imageUri, result);
-            if (!cancelled) {
-              setSavedEntryId(entry.id);
-            }
-          } catch {
-            // 保存失敗は判定表示を妨げない
-          }
         }
       } catch (e) {
         if (!cancelled) {
           void hapticWarning();
-          setAiError(
-            e instanceof Error ? e.message : t.scan.analyzeFailed,
-          );
-          setAiPhase('error');
+          if (isNotPigeonError(e)) {
+            setNotPigeon(true);
+            setErrorTitle(t.scan.notPigeonTitle);
+            setSaveError(t.scan.notPigeonBody);
+          } else {
+            setNotPigeon(false);
+            setErrorTitle(t.scan.errorTitle);
+            setSaveError(
+              e instanceof Error ? e.message : t.scan.recognizeFailed,
+            );
+          }
+          setPhase('error');
         }
       }
     })();
@@ -99,7 +107,7 @@ export default function ResultScreen() {
   }, []);
 
   const handleShare = React.useCallback(async () => {
-    if (!shareRef.current || !imageUri || !aiResult || shareBusy) return;
+    if (!shareRef.current || !imageUri || shareBusy || phase !== 'success') return;
     try {
       setShareBusy(true);
       const fileUri = await captureRef(shareRef, {
@@ -107,7 +115,7 @@ export default function ResultScreen() {
         quality: 0.92,
         result: 'tmpfile',
       });
-      await sharePigeonImageWithFallback(fileUri, aiResult.breed, aiResult.nickname);
+      await sharePigeonImageWithFallback(fileUri, 'ぽっぽ');
     } catch (e) {
       Alert.alert(
         t.common.shareError,
@@ -116,20 +124,21 @@ export default function ResultScreen() {
     } finally {
       setShareBusy(false);
     }
-  }, [aiResult, imageUri, shareBusy, t.common.shareError, t.common.shareFailed]);
+  }, [imageUri, phase, shareBusy, t.common.shareError, t.common.shareFailed]);
 
-  const cardPhase = aiPhase === 'idle' ? 'loading' : aiPhase;
+  const cardPhase = phase === 'idle' ? 'loading' : phase;
 
   return (
-    <Screen edges={false}>
+    <Screen edges={false} pigeons={false}>
       <View style={[styles.stage, { paddingTop: insets.top }]}>
         {imageUri ? (
           <View ref={shareRef} style={styles.shareWrap} collapsable={false}>
             <ShareCaptureFrame
               imageUri={imageUri}
               phase={cardPhase}
-              result={aiResult}
-              error={aiError}
+              error={saveError}
+              errorTitle={errorTitle}
+              subtitle={phase === 'success' ? t.scan.saved : undefined}
               minimal
             />
           </View>
@@ -139,7 +148,7 @@ export default function ResultScreen() {
       </View>
 
       <ActionFooter>
-        {aiPhase === 'success' && savedEntryId && (
+        {phase === 'success' && savedEntryId && (
           <Pressable
             accessibilityRole="button"
             onPress={() =>
@@ -153,25 +162,26 @@ export default function ResultScreen() {
           </Pressable>
         )}
         <View style={styles.footerRow}>
-          <FooterButton
-            label={t.common.share}
-            onPress={handleShare}
-            disabled={!imageUri || shareBusy || aiPhase !== 'success' || !aiResult}
-            loading={shareBusy}
-          />
-          {aiPhase === 'error' ? (
+          {phase === 'success' ? (
             <FooterButton
-              label={t.scan.retry}
+              label={t.common.share}
+              onPress={handleShare}
+              disabled={!imageUri || shareBusy}
+              loading={shareBusy}
+            />
+          ) : null}
+          {phase === 'error' && !notPigeon ? (
+            <FooterButton
+              label={t.scan.retryRecognize}
               variant="secondary"
               onPress={handleRetry}
             />
-          ) : (
-            <FooterButton
-              label={t.scan.retake}
-              variant="ghost"
-              onPress={() => router.back()}
-            />
-          )}
+          ) : null}
+          <FooterButton
+            label={t.scan.retake}
+            variant={phase === 'error' ? 'secondary' : 'ghost'}
+            onPress={() => router.back()}
+          />
         </View>
       </ActionFooter>
     </Screen>
@@ -198,7 +208,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   savedLinkText: {
-    color: colors.gold,
+    color: colors.accent,
     fontSize: 13,
     fontWeight: '700',
   },

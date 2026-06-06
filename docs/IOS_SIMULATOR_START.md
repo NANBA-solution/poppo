@@ -104,6 +104,28 @@ npm run start:dev:sim
 
 ---
 
+## ビルドが始まらない／止まったとき
+
+**原因の多くは Metro・xcodebuild・tunnel が同時に複数動いていること。**
+
+```bash
+# 全部止める
+pkill -f "expo run:ios"; pkill -f "expo start"; pkill -f "xcodebuild"; pkill -f "ngrok"
+sleep 2
+lsof -i :8081   # 何も出なければ OK
+```
+
+そのあと **1 本だけ** 実行:
+
+| 目的 | コマンド |
+|------|----------|
+| シミュレータ | `npm run build:dev:ios:sim` |
+| 実機 | `npm run build:dev:ios:device` |
+
+**同時にやらない:** `expo start` + `expo run:ios` + Xcode ▶ を並行すると DerivedData がロックされ「ビルドすらしなくなった」ように見える。
+
+---
+
 ## 関連ドキュメント
 
 - [LOCAL_IOS_BUILD.md](./LOCAL_IOS_BUILD.md) — Xcode 16.2 の入れ方・初回ネイティブビルド

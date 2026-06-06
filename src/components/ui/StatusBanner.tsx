@@ -1,4 +1,4 @@
-import { colors, radii } from '@/theme/tokens';
+import { borders, colors, radii } from '@/theme/tokens';
 import * as React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -22,12 +22,12 @@ const variantStyles: Record<
   },
   gold: {
     bg: colors.goldSoft,
-    border: 'rgba(255,217,138,0.35)',
+    border: colors.gold,
     text: colors.gold,
   },
   success: {
-    bg: 'rgba(155,231,176,0.12)',
-    border: 'rgba(155,231,176,0.35)',
+    bg: 'rgba(45,106,79,0.1)',
+    border: colors.accentBright,
     text: colors.success,
   },
 };
@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: radii.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: borders.medium,
   },
   text: {
     fontSize: 13,

@@ -1,8 +1,7 @@
 import { ScanResultCard } from '@/components/ScanResultCard';
-import { AppIcon } from '@/components/icons/AppIcon';
 import { useI18n } from '@/i18n/I18nProvider';
-import type { PigeonScanJson } from '@/services/aiService';
-import { colors } from '@/theme/tokens';
+import type { PigeonScanJson } from '@/types/scan';
+import { borders, colors } from '@/theme/tokens';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image, StyleSheet, Text, View } from 'react-native';
 
@@ -11,6 +10,7 @@ type ShareCaptureFrameProps = {
   phase: 'loading' | 'success' | 'error';
   result?: PigeonScanJson | null;
   error?: string | null;
+  errorTitle?: string;
   subtitle?: string;
   /** 透かし・ブランド帯なしのシンプル表示 */
   minimal?: boolean;
@@ -22,6 +22,7 @@ export function ShareCaptureFrame({
   phase,
   result,
   error,
+  errorTitle,
   subtitle,
   minimal = false,
 }: ShareCaptureFrameProps) {
@@ -39,7 +40,7 @@ export function ShareCaptureFrame({
 
       {minimal && (
         <LinearGradient
-          colors={['transparent', 'rgba(9,9,11,0.55)', colors.bg]}
+          colors={['transparent', 'rgba(26,26,26,0.35)', colors.paper]}
           locations={[0, 0.45, 1]}
           style={styles.bottomScrim}
           pointerEvents="none"
@@ -53,8 +54,8 @@ export function ShareCaptureFrame({
         <ScanResultCard
           phase={phase}
           breed={result?.breed}
-          nickname={result?.nickname}
           error={error}
+          errorTitle={errorTitle}
           subtitle={subtitle}
           showEyebrow={!minimal}
         />
@@ -62,7 +63,6 @@ export function ShareCaptureFrame({
 
       {!minimal && (
         <View style={styles.brandBar} pointerEvents="none">
-          <AppIcon name="pigeon" size={24} color={colors.accent} />
           <View style={styles.brandTextWrap}>
             <Text style={styles.brandTitle}>POPPO</Text>
             <Text style={styles.brandSub}>{t.scan.brandTagline}</Text>
@@ -76,7 +76,7 @@ export function ShareCaptureFrame({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.paper,
     overflow: 'hidden',
   },
   image: {
@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
   },
   dimOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.18)',
+    backgroundColor: 'rgba(0,0,0,0.12)',
   },
   bottomScrim: {
     position: 'absolute',
@@ -106,30 +106,30 @@ const styles = StyleSheet.create({
   },
   brandBar: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    flexDirection: 'row',
+    left: 16,
+    right: 16,
+    bottom: 16,
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: 'rgba(8,10,16,0.92)',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderStrong,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 999,
+    backgroundColor: colors.ink,
+    borderWidth: borders.medium,
+    borderColor: colors.ink,
   },
   brandTextWrap: {
-    gap: 1,
+    gap: 2,
+    alignItems: 'center',
   },
   brandTitle: {
-    color: colors.accent,
-    fontSize: 13,
+    color: colors.onAccent,
+    fontSize: 14,
     fontWeight: '900',
-    letterSpacing: 3,
+    letterSpacing: 4,
   },
   brandSub: {
-    color: colors.textMuted,
+    color: 'rgba(250,244,234,0.75)',
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });

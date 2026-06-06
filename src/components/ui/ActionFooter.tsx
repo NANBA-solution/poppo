@@ -1,4 +1,4 @@
-import { colors, radii } from '@/theme/tokens';
+import { borders, colors, radii, shadow } from '@/theme/tokens';
 import * as React from 'react';
 import {
   ActivityIndicator,
@@ -82,7 +82,7 @@ export function FooterButton({
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={variant === 'primary' ? colors.onAccent : colors.accent} />
+        <ActivityIndicator color={variant === 'primary' ? colors.onAccent : colors.ink} />
       ) : (
         <Text style={labelStyle}>{label}</Text>
       )}
@@ -93,42 +93,44 @@ export function FooterButton({
 const styles = StyleSheet.create({
   footer: {
     paddingHorizontal: 20,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 14,
+    borderTopWidth: borders.thin,
     borderTopColor: colors.border,
-    backgroundColor: colors.bgElevated,
+    backgroundColor: colors.surfaceSolid,
     gap: 10,
+    ...shadow.subtle,
   },
   btn: {
     paddingVertical: 16,
-    borderRadius: radii.md,
+    borderRadius: radii.pill,
     alignItems: 'center',
     minHeight: 52,
     justifyContent: 'center',
+    borderWidth: borders.thin,
   },
   primaryBtn: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.ink,
+    borderColor: colors.ink,
+    ...shadow.floating,
   },
   primaryLabel: {
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: '700',
     color: colors.onAccent,
+    letterSpacing: 0.2,
   },
   secondaryBtn: {
-    backgroundColor: colors.accentSoft,
-    borderWidth: StyleSheet.hairlineWidth,
+    backgroundColor: colors.surfaceSolid,
     borderColor: colors.borderStrong,
   },
   secondaryLabel: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.gold,
+    color: colors.ink,
   },
   dangerBtn: {
     backgroundColor: colors.dangerSoft,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,120,120,0.35)',
-    paddingHorizontal: 24,
+    borderColor: colors.danger,
   },
   dangerLabel: {
     fontSize: 16,
@@ -136,13 +138,14 @@ const styles = StyleSheet.create({
     color: colors.danger,
   },
   ghostBtn: {
-    backgroundColor: colors.text,
+    backgroundColor: 'transparent',
+    borderColor: 'transparent',
   },
   ghostLabel: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#111',
+    color: colors.textMuted,
   },
-  pressed: { opacity: 0.9 },
+  pressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
   disabled: { opacity: 0.45 },
 });

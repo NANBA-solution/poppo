@@ -22,13 +22,17 @@
 **シミュレータで詰まったら必読:** [`docs/IOS_SIMULATOR_START.md`](./IOS_SIMULATOR_START.md)（URL・Metro 二重起動・スプラッシュで止まる等の対処）
 
 ```bash
-# シミュレータ（日常はこれ）
 export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
-npm run build:dev:ios:sim      # ビルド＋起動。Metro は 127.0.0.1:8081
-# Metro だけ: npm run start:dev:sim → シミュレータで http://127.0.0.1:8081 をタップ
 
-# 実機
-npm run build:dev:ios          # USB 接続の iPhone を選択
+# シミュレータ（日常）
+npm run build:dev:ios:sim
+
+# 実機（USB 接続の iPhone）
+npm run build:dev:ios:device
+
+# Metro だけ（ビルド済みのとき）
+npm run start:dev:sim
+# → シミュレータで http://127.0.0.1:8081 をタップ
 
 # 初回ネイティブ生成（App Store で Xcode が入らないときは `docs/LOCAL_IOS_BUILD.md`）
 # 要件: Xcode 16.1 以上（RN 0.81）

@@ -68,7 +68,7 @@ export default function QuestsScreen() {
               highlighted={quest.completed}
             >
               <View style={styles.iconWrap}>
-                <AppIcon name={quest.icon} size={26} color={colors.accent} />
+                <AppIcon name={quest.icon} size={26} color={colors.ink} />
               </View>
               <View style={styles.cardBody}>
                 <Text style={styles.cardTitle}>{quest.title}</Text>
@@ -76,7 +76,9 @@ export default function QuestsScreen() {
                 <Text style={styles.cardFlavor}>{quest.flavor}</Text>
                 <Text style={styles.progress}>{quest.progressLabel}</Text>
               </View>
-              <Text style={styles.badge}>
+              <Text
+                style={[styles.badge, quest.completed ? styles.badgeDone : styles.badgePending]}
+              >
                 {quest.completed ? t.profile.questDone : t.profile.questPending}
               </Text>
             </GlassCard>
@@ -112,12 +114,14 @@ const styles = StyleSheet.create({
   cardTitle: { color: colors.text, fontSize: 16, fontWeight: '800' },
   cardDesc: { color: colors.textMuted, fontSize: 13, lineHeight: 18 },
   cardFlavor: {
-    color: 'rgba(255,200,80,0.65)',
+    color: colors.textMuted,
     fontSize: 11,
     lineHeight: 16,
     fontStyle: 'italic',
     fontWeight: '600',
   },
   progress: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
-  badge: { color: colors.gold, fontSize: 12, fontWeight: '800' },
+  badge: { fontSize: 12, fontWeight: '800' },
+  badgeDone: { color: colors.success },
+  badgePending: { color: colors.textMuted },
 });

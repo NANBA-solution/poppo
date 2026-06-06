@@ -1,23 +1,17 @@
 import { AppIcon } from '@/components/icons/AppIcon';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { LanguagePills } from '@/components/ui/LanguagePills';
 import { Screen } from '@/components/ui/Screen';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { useI18n } from '@/i18n/I18nProvider';
 import { clearAllCollection } from '@/services/collectionService';
-import {
-  canUseAppleSignIn,
-  getAuthProviderType,
-  signInWithAppleAndMigrate,
-  type AuthProviderType,
-} from '@/services/authService';
-import type { AppLocale } from '@/services/localeService';
 import { resetOnboardingFlow } from '@/services/onboardingService';
-import { colors, radii } from '@/theme/tokens';
+import { borders, colors } from '@/theme/tokens';
 import { hapticWarning } from '@/utils/haptics';
 import Constants from 'expo-constants';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import * as React from 'react';
-import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 const APP_VERSION = Constants.expoConfig?.version ?? '1.0.0';
 
@@ -67,10 +61,8 @@ function SettingsRow({
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { t, locale, setLocale } = useI18n();
+  const { t } = useI18n();
   const [clearing, setClearing] = React.useState(false);
-  const [appleSigningIn, setAppleSigningIn] = React.useState(false);
-  const [authProvider, setAuthProvider] = React.useState<AuthProviderType>('signed_out');
 
   const handleClearCollection = React.useCallback(() => {
     Alert.alert(t.settings.clearConfirmTitle, t.settings.clearConfirmBody, [
@@ -98,42 +90,6 @@ export default function SettingsScreen() {
     void resetOnboardingFlow().then(() => router.replace('/onboarding'));
   }, [router]);
 
-  const handleAppleSignIn = React.useCallback(async () => {
-    try {
-      setAppleSigningIn(true);
-      await signInWithAppleAndMigrate();
-      setAuthProvider('apple');
-      Alert.alert(t.settings.appleDone, t.settings.appleDoneBody);
-    } catch (e) {
-      Alert.alert(
-        t.settings.appleFailed,
-        e instanceof Error ? e.message : t.common.error,
-      );
-    } finally {
-      setAppleSigningIn(false);
-    }
-  }, [t]);
-
-  useFocusEffect(
-    React.useCallback(() => {
-      void getAuthProviderType().then(setAuthProvider);
-    }, []),
-  );
-
-  const authStatusLabel = React.useMemo(() => {
-    if (authProvider === 'apple') return t.settings.appleLinked;
-    if (authProvider === 'anonymous') return t.settings.anonymous;
-    if (authProvider === 'other') return t.settings.appleLinked;
-    return t.settings.signedOut;
-  }, [authProvider, t]);
-
-  const setLanguage = React.useCallback(
-    (next: AppLocale) => {
-      void setLocale(next);
-    },
-    [setLocale],
-  );
-
   return (
     <Screen>
       <ScreenHeader title={t.settings.title} />
@@ -153,48 +109,10 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>{t.settings.app}</Text>
         <GlassCard style={styles.cardStack}>
-          <SettingsRow label={t.settings.accountStatus} value={authStatusLabel} />
-          <View style={styles.divider} />
           <View style={styles.langRow}>
             <Text style={styles.rowLabel}>{t.settings.language}</Text>
-            <View style={styles.langPills}>
-              <Pressable
-                onPress={() => setLanguage('ja')}
-                style={({ pressed }) => [
-                  styles.langPill,
-                  locale === 'ja' && styles.langPillActive,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Text style={[styles.langPillLabel, locale === 'ja' && styles.langPillLabelActive]}>
-                  {t.settings.languageJa}
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setLanguage('en')}
-                style={({ pressed }) => [
-                  styles.langPill,
-                  locale === 'en' && styles.langPillActive,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Text style={[styles.langPillLabel, locale === 'en' && styles.langPillLabelActive]}>
-                  {t.settings.languageEn}
-                </Text>
-              </Pressable>
-            </View>
+            <LanguagePills />
           </View>
-          {canUseAppleSignIn() && (
-            <>
-              <View style={styles.divider} />
-              <SettingsRow
-                label={t.settings.appleSignIn}
-                value={appleSigningIn ? '…' : undefined}
-                onPress={handleAppleSignIn}
-                disabled={appleSigningIn}
-              />
-            </>
-          )}
           <View style={styles.divider} />
           <SettingsRow label={t.settings.onboarding} onPress={handleShowOnboarding} />
           <View style={styles.divider} />
@@ -243,10 +161,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  chevron: {
-    color: colors.textMuted,
-    fontSize: 20,
-  },
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
@@ -256,31 +170,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 4,
     gap: 10,
-  },
-  langPills: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  langPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: radii.pill,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : {}),
-  },
-  langPillActive: {
-    borderColor: colors.borderStrong,
-    backgroundColor: colors.accentSoft,
-  },
-  langPillLabel: {
-    color: colors.textMuted,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  langPillLabelActive: {
-    color: colors.accent,
   },
   pressed: {
     opacity: 0.9,

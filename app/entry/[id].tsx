@@ -64,7 +64,7 @@ export default function EntryDetailScreen() {
         quality: 0.92,
         result: 'tmpfile',
       });
-      await sharePigeonImageWithFallback(fileUri, entry.breed, entry.nickname);
+      await sharePigeonImageWithFallback(fileUri, entry.breed);
     } catch (e) {
       Alert.alert(
         t.common.shareError,
@@ -102,7 +102,7 @@ export default function EntryDetailScreen() {
   }, [deleting, entry, router, t.common.cancel, t.common.delete, t.common.error, t.entry.deleteBody, t.entry.deleteError, t.entry.deleteTitle]);
 
   return (
-    <Screen edges={false}>
+    <Screen edges={false} pigeons={false}>
       <View style={{ paddingTop: insets.top }}>
         <ScreenHeader title={t.entry.title} />
       </View>
@@ -122,7 +122,7 @@ export default function EntryDetailScreen() {
               <ShareCaptureFrame
                 imageUri={entry.imageUri}
                 phase="success"
-                result={{ breed: entry.breed, nickname: entry.nickname }}
+                result={{ isPigeon: true, breed: entry.breed }}
                 subtitle={formatDateTime(entry.scannedAt, locale)}
                 minimal
               />

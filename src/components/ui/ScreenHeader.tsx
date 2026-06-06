@@ -1,6 +1,6 @@
 import { AppIcon } from '@/components/icons/AppIcon';
 import { useI18n } from '@/i18n/I18nProvider';
-import { colors, radii } from '@/theme/tokens';
+import { borders, colors, radii, shadow } from '@/theme/tokens';
 import { useRouter } from 'expo-router';
 import * as React from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -22,7 +22,7 @@ export function ScreenHeader({ title, right, showBack = true }: ScreenHeaderProp
           onPress={() => router.back()}
           style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
         >
-          <AppIcon name="chevron-left" size={18} color={colors.accent} />
+          <AppIcon name="chevron-left" size={18} color={colors.ink} />
           <Text style={styles.backLabel}>{t.common.back}</Text>
         </Pressable>
       ) : (
@@ -47,15 +47,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     minWidth: 72,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderRadius: radii.pill,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.surfaceSolid,
+    borderWidth: borders.thin,
+    borderColor: colors.border,
+    ...shadow.subtle,
     ...(Platform.OS === 'web' ? { cursor: 'pointer' as const } : {}),
   },
   backSpacer: { minWidth: 72 },
   backLabel: {
-    color: colors.accent,
+    color: colors.ink,
     fontSize: 15,
     fontWeight: '700',
   },
@@ -63,12 +66,12 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
     color: colors.text,
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
-    letterSpacing: 0.3,
+    letterSpacing: -0.2,
   },
   pressed: {
-    opacity: 0.85,
+    opacity: 0.88,
     transform: [{ scale: 0.98 }],
   },
 });

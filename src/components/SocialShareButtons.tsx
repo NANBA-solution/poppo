@@ -1,6 +1,6 @@
 import { AppIcon } from '@/components/icons/AppIcon';
 import { useI18n } from '@/i18n/I18nProvider';
-import { colors, radii } from '@/theme/tokens';
+import { borders, colors, radii } from '@/theme/tokens';
 import { captureShareImage, shareToInstagramStory, shareToX } from '@/utils/shareSocial';
 import { hapticLight } from '@/utils/haptics';
 import * as React from 'react';
@@ -17,14 +17,12 @@ import {
 type SocialShareButtonsProps = {
   shareRef: React.RefObject<ViewType | null>;
   breed: string;
-  nickname: string;
   disabled?: boolean;
 };
 
 export function SocialShareButtons({
   shareRef,
   breed,
-  nickname,
   disabled = false,
 }: SocialShareButtonsProps) {
   const { t } = useI18n();
@@ -38,9 +36,9 @@ export function SocialShareButtons({
         void hapticLight();
         const fileUri = await captureShareImage(shareRef.current);
         if (target === 'instagram') {
-          await shareToInstagramStory(fileUri, breed, nickname);
+          await shareToInstagramStory(fileUri, breed);
         } else {
-          await shareToX(fileUri, breed, nickname);
+          await shareToX(fileUri, breed);
         }
       } catch (e) {
         Alert.alert(
@@ -51,7 +49,7 @@ export function SocialShareButtons({
         setBusy(null);
       }
     },
-    [breed, busy, disabled, nickname, shareRef, t.common.shareError, t.share.shareFailed],
+    [breed, busy, disabled, shareRef, t.common.shareError, t.share.shareFailed],
   );
 
   const isDisabled = disabled || busy !== null;
@@ -93,11 +91,11 @@ export function SocialShareButtons({
         ]}
       >
         {busy === 'x' ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={colors.ink} />
         ) : (
           <>
-            <AppIcon name="x-logo" size={20} color="#fff" />
-            <Text style={styles.btnLabel}>{t.share.x}</Text>
+            <AppIcon name="x-logo" size={20} color={colors.ink} />
+            <Text style={[styles.btnLabel, styles.xBtnLabel]}>{t.share.x}</Text>
           </>
         )}
       </Pressable>
@@ -124,9 +122,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#E1306C',
   },
   xBtn: {
-    backgroundColor: colors.bgElevated,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    backgroundColor: colors.surfaceSolid,
+    borderWidth: borders.medium,
+    borderColor: colors.borderStrong,
   },
   btnLabel: {
     color: '#fff',
@@ -134,6 +132,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     textAlign: 'center',
     lineHeight: 16,
+  },
+  xBtnLabel: {
+    color: colors.ink,
   },
   pressed: {
     opacity: 0.9,
