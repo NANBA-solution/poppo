@@ -1,7 +1,7 @@
 import { useI18n } from '@/i18n/I18nProvider';
 import {
   refreshDailyNotifications,
-  registerDailyNotificationResponse,
+  registerNotificationResponse,
 } from '@/services/dailyNotificationService';
 import { useRouter } from 'expo-router';
 import * as React from 'react';
@@ -27,8 +27,9 @@ export function DailyNotificationBootstrap() {
   }, [locale]);
 
   React.useEffect(() => {
-    return registerDailyNotificationResponse(() => {
-      router.push('/camera');
+    return registerNotificationResponse((url) => {
+      if (url === '/camera') router.push('/camera');
+      if (url === '/quests') router.push('/quests');
     });
   }, [router]);
 
@@ -37,9 +38,9 @@ export function DailyNotificationBootstrap() {
       const Notifications = await import('expo-notifications').catch(() => null);
       if (!Notifications) return;
       const response = await Notifications.getLastNotificationResponseAsync();
-      if (response?.notification.request.content.data?.url === '/camera') {
-        router.push('/camera');
-      }
+      const url = response?.notification.request.content.data?.url;
+      if (url === '/camera') router.push('/camera');
+      if (url === '/quests') router.push('/quests');
     })();
   }, [router]);
 

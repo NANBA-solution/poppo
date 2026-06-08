@@ -451,6 +451,11 @@ export const en: TranslationTree = {
       },
     },
   },
+  notifications: {
+    questTitle: 'Quest complete!',
+    questBody: 'Completed “{title}”',
+    questBodyMultiple: '{count} quests completed ({titles})',
+  },
   titles: {
     progressToNext: '{count} more scans to next title',
     tiers: [

@@ -48,6 +48,23 @@ async function ensureAndroidChannel(Notifications: NotificationsModule): Promise
   });
 }
 
+export async function ensureNotificationsReady(options?: {
+  requestPermission?: boolean;
+}): Promise<NotificationsModule | null> {
+  const Notifications = await loadNotifications();
+  if (!Notifications) return null;
+
+  ensureForegroundHandler(Notifications);
+  await ensureAndroidChannel(Notifications);
+
+  const current = await Notifications.getPermissionsAsync();
+  if (current.granted) return Notifications;
+  if (!options?.requestPermission) return null;
+
+  const granted = await ensurePermission(Notifications);
+  return granted ? Notifications : null;
+}
+
 async function ensurePermission(Notifications: NotificationsModule): Promise<boolean> {
   const current = await Notifications.getPermissionsAsync();
   if (current.granted) return true;
@@ -114,9 +131,7 @@ export async function refreshDailyNotifications(locale: AppLocale): Promise<void
   }
 }
 
-export function registerDailyNotificationResponse(
-  onOpenCamera: () => void,
-): () => void {
+export function registerNotificationResponse(onNavigate: (url: string) => void): () => void {
   let remove: (() => void) | undefined;
   let cancelled = false;
 
@@ -126,7 +141,7 @@ export function registerDailyNotificationResponse(
 
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
       const url = response.notification.request.content.data?.url;
-      if (url === '/camera') onOpenCamera();
+      if (typeof url === 'string') onNavigate(url);
     });
 
     remove = () => subscription.remove();
@@ -136,4 +151,11 @@ export function registerDailyNotificationResponse(
     cancelled = true;
     remove?.();
   };
+}
+
+/** @deprecated registerNotificationResponse を使用 */
+export function registerDailyNotificationResponse(onOpenCamera: () => void): () => void {
+  return registerNotificationResponse((url) => {
+    if (url === '/camera') onOpenCamera();
+  });
 }

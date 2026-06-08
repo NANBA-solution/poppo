@@ -448,6 +448,11 @@ export const ja = {
       },
     },
   },
+  notifications: {
+    questTitle: 'クエスト達成！',
+    questBody: '「{title}」を達成しました',
+    questBodyMultiple: '{count}件のクエストを達成（{titles}）',
+  },
   titles: {
     progressToNext: '次の称号まで {count} 羽',
     tiers: [

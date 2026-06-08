@@ -9,6 +9,7 @@ import {
   getPigeonCount,
   savePigeonScan,
 } from '@/services/collectionService';
+import { notifyQuestsCompleted } from '@/services/questNotificationService';
 import { detectNewQuests, getQuestTitle } from '@/services/questService';
 import { recognizePigeonLocally } from '@/services/pigeonDetectService';
 import { isNotPigeonError } from '@/types/scan';
@@ -112,6 +113,7 @@ export default function ResultScreen() {
           void hapticSuccess();
           if (newQuestIds.length > 0) {
             void playQuestComplete();
+            void notifyQuestsCompleted(questTitles, t, locale);
           }
         }
       } catch (e) {
