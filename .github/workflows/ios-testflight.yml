@@ -167,11 +167,21 @@ jobs:
 
       - name: Upload to TestFlight
         run: |
+          set +e
           xcrun altool --upload-app \
             --type ios \
             --file "$IPA_PATH" \
             --apiKey "$APPSTORE_API_KEY_ID_CLEAN" \
             --apiIssuer "$APPSTORE_ISSUER_ID_CLEAN"
+          STATUS=$?
+          set -e
+          if [ "$STATUS" -ne 0 ]; then
+            echo ""
+            echo "Upload 失敗。初回は App Store Connect にアプリ登録が必要です:"
+            echo "  Bundle ID: ${BUNDLE_ID}"
+            echo "  手順: ci/GITHUB_SETUP.md の「初回アップロード前」"
+            exit "$STATUS"
+          fi
 
       - name: Summary
         run: |
