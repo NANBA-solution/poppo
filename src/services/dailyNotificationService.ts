@@ -3,6 +3,7 @@ import {
   type DailyNotificationCopy,
 } from '@/constants/dailyNotifications';
 import type { AppLocale } from '@/services/localeService';
+import { getNotificationsEnabled } from '@/services/notificationPrefsService';
 import { Platform } from 'react-native';
 
 const NOTIFICATION_PREFIX = 'poppo-daily-';
@@ -51,6 +52,9 @@ async function ensureAndroidChannel(Notifications: NotificationsModule): Promise
 export async function ensureNotificationsReady(options?: {
   requestPermission?: boolean;
 }): Promise<NotificationsModule | null> {
+  const enabled = await getNotificationsEnabled();
+  if (!enabled) return null;
+
   const Notifications = await loadNotifications();
   if (!Notifications) return null;
 
@@ -63,6 +67,28 @@ export async function ensureNotificationsReady(options?: {
 
   const granted = await ensurePermission(Notifications);
   return granted ? Notifications : null;
+}
+
+/** 設定画面から通知をオンにするとき */
+export async function enableNotificationsWithPermission(locale: AppLocale): Promise<boolean> {
+  const Notifications = await loadNotifications();
+  if (!Notifications) return false;
+
+  ensureForegroundHandler(Notifications);
+  await ensureAndroidChannel(Notifications);
+
+  const granted = await ensurePermission(Notifications);
+  if (!granted) return false;
+
+  await refreshDailyNotifications(locale);
+  return true;
+}
+
+/** 設定画面から通知をオフにするとき */
+export async function disableNotifications(): Promise<void> {
+  const Notifications = await loadNotifications();
+  if (!Notifications) return;
+  await cancelScheduledDaily(Notifications);
 }
 
 async function ensurePermission(Notifications: NotificationsModule): Promise<boolean> {
@@ -95,14 +121,21 @@ async function cancelScheduledDaily(Notifications: NotificationsModule): Promise
 }
 
 export async function refreshDailyNotifications(locale: AppLocale): Promise<void> {
+  const enabled = await getNotificationsEnabled();
+  if (!enabled) {
+    const Notifications = await loadNotifications();
+    if (Notifications) await cancelScheduledDaily(Notifications);
+    return;
+  }
+
   const Notifications = await loadNotifications();
   if (!Notifications) return;
 
   ensureForegroundHandler(Notifications);
   await ensureAndroidChannel(Notifications);
 
-  const granted = await ensurePermission(Notifications);
-  if (!granted) return;
+  const current = await Notifications.getPermissionsAsync();
+  if (!current.granted) return;
 
   await cancelScheduledDaily(Notifications);
 

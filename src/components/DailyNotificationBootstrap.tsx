@@ -3,28 +3,32 @@ import {
   refreshDailyNotifications,
   registerNotificationResponse,
 } from '@/services/dailyNotificationService';
+import { getNotificationsEnabled } from '@/services/notificationPrefsService';
 import { useRouter } from 'expo-router';
 import * as React from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 
-/** 毎日1回のローカル通知を登録し、タップでカメラへ誘導 */
+/** 通知オン時のみ毎日のローカル通知を登録し、タップで画面へ誘導 */
 export function DailyNotificationBootstrap() {
   const { locale } = useI18n();
   const router = useRouter();
 
-  React.useEffect(() => {
-    void refreshDailyNotifications(locale);
+  const syncIfEnabled = React.useCallback(async () => {
+    if (!(await getNotificationsEnabled())) return;
+    await refreshDailyNotifications(locale);
   }, [locale]);
 
   React.useEffect(() => {
+    void syncIfEnabled();
+  }, [syncIfEnabled]);
+
+  React.useEffect(() => {
     const onStateChange = (state: AppStateStatus) => {
-      if (state === 'active') {
-        void refreshDailyNotifications(locale);
-      }
+      if (state === 'active') void syncIfEnabled();
     };
     const sub = AppState.addEventListener('change', onStateChange);
     return () => sub.remove();
-  }, [locale]);
+  }, [syncIfEnabled]);
 
   React.useEffect(() => {
     return registerNotificationResponse((url) => {

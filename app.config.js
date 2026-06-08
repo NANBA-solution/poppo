@@ -1,6 +1,9 @@
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
+/** GitHub Actions TestFlight ビルド時は dev-client を外して本番相当に prebuild */
+const isCIRelease = process.env.CI_RELEASE === '1';
+
 const apiKey = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY?.trim() ?? '';
 const apiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim() ?? '';
 const apiSecret = process.env.EXPO_PUBLIC_POPPO_API_SECRET?.trim() ?? '';
@@ -22,6 +25,7 @@ module.exports = {
     slug: 'poppo',
     ios: {
       ...require('./app.json').expo.ios,
+      supportsTablet: false,
       deploymentTarget: '15.5',
       bundleIdentifier: 'app.poppo.mobile',
       infoPlist: {
@@ -50,6 +54,8 @@ module.exports = {
           ios: {
             // ML Kit ImageLabeling pod は 15.5 以上が必要
             deploymentTarget: '15.5',
+            // iPhone 専用 — iPad スクショ不要（App Store 提出用）
+            targetedDeviceFamily: '1',
           },
         },
       ],
@@ -60,15 +66,13 @@ module.exports = {
           color: '#F5F1EA',
         },
       ],
-      'expo-dev-client',
-      'expo-apple-authentication',
+      ...(isCIRelease ? [] : ['expo-dev-client']),
       [
         'expo-media-library',
         {
-          photosPermission:
-            'ぽっぽ（poppo）がスキャン画像を写真ライブラリに保存し、Instagram 等へ共有します。',
           savePhotosPermission:
             'ぽっぽ（poppo）がスキャン画像を写真ライブラリに保存し、Instagram 等へ共有します。',
+          isAccessMediaLocationEnabled: false,
         },
       ],
     ],

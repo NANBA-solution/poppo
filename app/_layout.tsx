@@ -1,13 +1,13 @@
 import 'react-native-gesture-handler';
 
 import { DailyNotificationBootstrap } from '@/components/DailyNotificationBootstrap';
+import { LaunchScreen } from '@/components/ui/LaunchScreen';
 import { I18nProvider } from '@/i18n/I18nProvider';
 import { colors } from '@/theme/tokens';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as React from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -22,12 +22,7 @@ function RootNavigator() {
   }, []);
 
   if (booting) {
-    return (
-      <View style={styles.boot}>
-        <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={styles.bootText}>起動中…</Text>
-      </View>
-    );
+    return <LaunchScreen />;
   }
 
   return (
@@ -54,16 +49,3 @@ export default function RootLayout() {
   );
 }
 
-const styles = StyleSheet.create({
-  boot: {
-    flex: 1,
-    backgroundColor: colors.bg,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 16,
-  },
-  bootText: {
-    color: colors.textMuted,
-    fontSize: 15,
-  },
-});

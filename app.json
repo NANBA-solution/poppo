@@ -9,12 +9,12 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": false,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/brand-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#F5F1EA"
     },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "infoPlist": {
         "LSApplicationQueriesSchemes": [
           "instagram",
@@ -40,8 +40,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "ぽっぽ（poppo）が写真を撮るためにカメラにアクセスします。",
-          "microphonePermission": "ぽっぽ（poppo）が動画に音声を含めて録画する場合にマイクへアクセスします。",
+          "cameraPermission": "ぽっぽ（poppo）がハトをスキャンするためにカメラにアクセスします。",
           "recordAudioAndroid": false,
           "barcodeScannerEnabled": false
         }

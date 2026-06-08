@@ -3,15 +3,32 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { LanguagePills } from '@/components/ui/LanguagePills';
 import { Screen } from '@/components/ui/Screen';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
+import { legalUrls } from '@/constants/legal';
 import { useI18n } from '@/i18n/I18nProvider';
 import { clearAllCollection } from '@/services/collectionService';
+import {
+  disableNotifications,
+  enableNotificationsWithPermission,
+} from '@/services/dailyNotificationService';
 import { resetOnboardingFlow } from '@/services/onboardingService';
+import {
+  getNotificationsEnabled,
+  setNotificationsEnabled,
+} from '@/services/notificationPrefsService';
 import { borders, colors } from '@/theme/tokens';
 import { hapticWarning } from '@/utils/haptics';
 import Constants from 'expo-constants';
 import { useTabRouter } from '@/hooks/useTabRouter';
 import * as React from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Alert,
+  Linking,
+  Pressable,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from 'react-native';
 
 const APP_VERSION = Constants.expoConfig?.version ?? '1.0.0';
 
@@ -61,8 +78,46 @@ function SettingsRow({
 
 export default function SettingsScreen() {
   const router = useTabRouter();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [clearing, setClearing] = React.useState(false);
+  const [notificationsOn, setNotificationsOn] = React.useState(false);
+  const [notificationsBusy, setNotificationsBusy] = React.useState(false);
+
+  React.useEffect(() => {
+    void getNotificationsEnabled().then(setNotificationsOn);
+  }, []);
+
+  const openUrl = React.useCallback((url: string) => {
+    void Linking.openURL(url);
+  }, []);
+
+  const handleNotificationsToggle = React.useCallback(
+    async (next: boolean) => {
+      if (notificationsBusy) return;
+      setNotificationsBusy(true);
+      try {
+        if (next) {
+          await setNotificationsEnabled(true);
+          const granted = await enableNotificationsWithPermission(locale);
+          if (!granted) {
+            await setNotificationsEnabled(false);
+            setNotificationsOn(false);
+            Alert.alert(t.settings.notificationsDeniedTitle, t.settings.notificationsDeniedBody);
+            return;
+          }
+          setNotificationsOn(true);
+          return;
+        }
+
+        await setNotificationsEnabled(false);
+        await disableNotifications();
+        setNotificationsOn(false);
+      } finally {
+        setNotificationsBusy(false);
+      }
+    },
+    [locale, notificationsBusy, t],
+  );
 
   const handleClearCollection = React.useCallback(() => {
     Alert.alert(t.settings.clearConfirmTitle, t.settings.clearConfirmBody, [
@@ -107,6 +162,25 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.section}>
+        <Text style={styles.sectionTitle}>{t.settings.notifications}</Text>
+        <GlassCard style={styles.cardStack}>
+          <View style={styles.switchRow}>
+            <View style={styles.switchCopy}>
+              <Text style={styles.rowLabel}>{t.settings.dailyNotifications}</Text>
+              <Text style={styles.rowHint}>{t.settings.dailyNotificationsHint}</Text>
+            </View>
+            <Switch
+              value={notificationsOn}
+              onValueChange={(value) => void handleNotificationsToggle(value)}
+              disabled={notificationsBusy}
+              trackColor={{ false: colors.borderStrong, true: colors.text }}
+              thumbColor={colors.surface}
+            />
+          </View>
+        </GlassCard>
+      </View>
+
+      <View style={styles.section}>
         <Text style={styles.sectionTitle}>{t.settings.app}</Text>
         <GlassCard style={styles.cardStack}>
           <View style={styles.langRow}>
@@ -117,6 +191,23 @@ export default function SettingsScreen() {
           <SettingsRow label={t.settings.onboarding} onPress={handleShowOnboarding} />
           <View style={styles.divider} />
           <SettingsRow label={t.settings.version} value={APP_VERSION} />
+        </GlassCard>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>{t.settings.legal}</Text>
+        <GlassCard style={styles.cardStack}>
+          <SettingsRow
+            label={t.settings.privacyPolicy}
+            onPress={() => openUrl(legalUrls.privacy)}
+          />
+          <View style={styles.divider} />
+          <SettingsRow label={t.settings.terms} onPress={() => openUrl(legalUrls.terms)} />
+          <View style={styles.divider} />
+          <SettingsRow
+            label={t.settings.support}
+            onPress={() => openUrl(legalUrls.support)}
+          />
         </GlassCard>
       </View>
     </Screen>
@@ -170,6 +261,24 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 4,
     gap: 10,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+  },
+  switchCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  rowHint: {
+    color: colors.textMuted,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500',
   },
   pressed: {
     opacity: 0.9,

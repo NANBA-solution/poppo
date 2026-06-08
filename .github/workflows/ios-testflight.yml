@@ -1,0 +1,153 @@
+# ぽっぽ（poppo）— macOS 26 + Xcode 26 で prebuild → Archive → TestFlight
+# ローカル Archive 不要。push main または手動 Run workflow。
+#
+# 初回: ci/GITHUB_SETUP.md — GitHub Secrets 4 つ（Admin API キー必須）
+
+name: iOS TestFlight Upload
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "src/**"
+      - "assets/**"
+      - "modules/**"
+      - "app.json"
+      - "app.config.js"
+      - "package.json"
+      - "package-lock.json"
+      - "babel.config.js"
+      - "index.js"
+      - ".github/workflows/ios-testflight.yml"
+      - "ci/**"
+
+concurrency:
+  group: ios-testflight-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  upload:
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      CI_RELEASE: "1"
+      NODE_VERSION: "20"
+      PROJECT_WORKSPACE: ios/poppo.xcworkspace
+      SCHEME: poppo
+      BUNDLE_ID: app.poppo.mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Expo prebuild (iOS, production)
+        run: npx expo prebuild --platform ios --no-install
+
+      - name: CocoaPods install
+        run: |
+          cd ios
+          LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 pod install
+
+      - name: Select Xcode 26
+        run: |
+          sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+          xcodebuild -version
+          xcodebuild -showsdks | grep -E "iphoneos|SDK"
+
+      - name: Validate and normalize secrets
+        env:
+          ISSUER: ${{ secrets.APPSTORE_ISSUER_ID }}
+          KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
+          API_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+        run: |
+          trim() { printf '%s' "$1" | tr -d '\r"' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'; }
+          ISSUER="$(trim "$ISSUER")"
+          KEY_ID="$(trim "$KEY_ID")"
+          TEAM="$(trim "$TEAM")"
+          test -n "$ISSUER" || (echo "APPSTORE_ISSUER_ID が未設定です" && exit 1)
+          test -n "$KEY_ID" || (echo "APPSTORE_API_KEY_ID が未設定です" && exit 1)
+          test -n "$API_KEY" || (echo "APPSTORE_API_PRIVATE_KEY が未設定です" && exit 1)
+          test -n "$TEAM" || (echo "DEVELOPMENT_TEAM が未設定です" && exit 1)
+          echo "APPSTORE_ISSUER_ID_CLEAN=$ISSUER" >> "$GITHUB_ENV"
+          echo "APPSTORE_API_KEY_ID_CLEAN=$KEY_ID" >> "$GITHUB_ENV"
+          echo "DEVELOPMENT_TEAM_CLEAN=$TEAM" >> "$GITHUB_ENV"
+
+      - name: Install App Store Connect API key
+        env:
+          API_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          KEY_FILE="$HOME/.appstoreconnect/private_keys/AuthKey_${APPSTORE_API_KEY_ID_CLEAN}.p8"
+          CLEAN="$(printf '%s' "$API_KEY" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          if [[ "$CLEAN" == *"BEGIN PRIVATE KEY"* ]]; then
+            printf '%s\n' "$CLEAN" > "$KEY_FILE"
+            echo "API key (PEM) を配置しました"
+          elif printf '%s' "$CLEAN" | base64 -d > "$KEY_FILE" 2>/dev/null && openssl pkey -in "$KEY_FILE" -noout 2>/dev/null; then
+            echo "API key (base64) を配置しました"
+          else
+            echo "APPSTORE_API_PRIVATE_KEY が不正です。PEM 全文か base64 1行を設定してください"
+            exit 1
+          fi
+          openssl pkey -in "$KEY_FILE" -noout
+          mkdir -p "$HOME/private_keys"
+          cp "$KEY_FILE" "$HOME/private_keys/AuthKey_${APPSTORE_API_KEY_ID_CLEAN}.p8"
+          echo "AUTH_KEY_PATH=$KEY_FILE" >> "$GITHUB_ENV"
+
+      - name: Archive
+        run: |
+          ARCHIVE_PATH="$RUNNER_TEMP/poppo.xcarchive"
+          xcodebuild archive \
+            -workspace "$PROJECT_WORKSPACE" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -archivePath "$ARCHIVE_PATH" \
+            -destination "generic/platform=iOS" \
+            DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM_CLEAN" \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            CODE_SIGN_STYLE=Automatic \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$AUTH_KEY_PATH" \
+            -authenticationKeyID "$APPSTORE_API_KEY_ID_CLEAN" \
+            -authenticationKeyIssuerID "$APPSTORE_ISSUER_ID_CLEAN"
+          echo "ARCHIVE_PATH=$ARCHIVE_PATH" >> "$GITHUB_ENV"
+
+      - name: Export IPA
+        run: |
+          EXPORT_DIR="$RUNNER_TEMP/export"
+          xcodebuild -exportArchive \
+            -archivePath "$ARCHIVE_PATH" \
+            -exportPath "$EXPORT_DIR" \
+            -exportOptionsPlist ci/ExportOptions.plist \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$AUTH_KEY_PATH" \
+            -authenticationKeyID "$APPSTORE_API_KEY_ID_CLEAN" \
+            -authenticationKeyIssuerID "$APPSTORE_ISSUER_ID_CLEAN"
+          IPA="$(find "$EXPORT_DIR" -name '*.ipa' | head -1)"
+          test -n "$IPA" || (echo "IPA が見つかりません" && exit 1)
+          echo "IPA_PATH=$IPA" >> "$GITHUB_ENV"
+
+      - name: Upload to TestFlight
+        run: |
+          xcrun altool --upload-app \
+            --type ios \
+            --file "$IPA_PATH" \
+            --apiKey "$APPSTORE_API_KEY_ID_CLEAN" \
+            --apiIssuer "$APPSTORE_ISSUER_ID_CLEAN"
+
+      - name: Summary
+        run: |
+          VERSION="$(node -p "require('./app.json').expo.version")"
+          echo "アップロード完了。App Store Connect → TestFlight で Processing を確認してください。"
+          echo "Build: ${VERSION} (${{ github.run_number }})"
+          echo "Bundle ID: ${BUNDLE_ID}"
