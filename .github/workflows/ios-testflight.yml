@@ -128,6 +128,7 @@ jobs:
             DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM_CLEAN" \
             CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
             CODE_SIGN_STYLE=Automatic \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
             -allowProvisioningUpdates \
             -authenticationKeyPath "$AUTH_KEY_PATH" \
             -authenticationKeyID "$APPSTORE_API_KEY_ID_CLEAN" \
@@ -137,17 +138,46 @@ jobs:
       - name: Export IPA
         run: |
           EXPORT_DIR="$RUNNER_TEMP/export"
-          xcodebuild -exportArchive \
-            -archivePath "$ARCHIVE_PATH" \
-            -exportPath "$EXPORT_DIR" \
-            -exportOptionsPlist ci/ExportOptions.plist \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$AUTH_KEY_PATH" \
-            -authenticationKeyID "$APPSTORE_API_KEY_ID_CLEAN" \
-            -authenticationKeyIssuerID "$APPSTORE_ISSUER_ID_CLEAN"
-          IPA="$(find "$EXPORT_DIR" -name '*.ipa' | head -1)"
-          test -n "$IPA" || (echo "IPA が見つかりません" && exit 1)
-          echo "IPA_PATH=$IPA" >> "$GITHUB_ENV"
+          MAX_ATTEMPTS=3
+          EXPORT_PLISTS=(ci/ExportOptions.plist ci/ExportOptions-appstore.plist)
+
+          for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
+            PLIST="${EXPORT_PLISTS[$((attempt > 1 ? 1 : 0))]}"
+            echo "Export attempt ${attempt}/${MAX_ATTEMPTS} (plist: ${PLIST})"
+            rm -rf "$EXPORT_DIR"
+            mkdir -p "$EXPORT_DIR"
+
+            set +e
+            xcodebuild -exportArchive \
+              -archivePath "$ARCHIVE_PATH" \
+              -exportPath "$EXPORT_DIR" \
+              -exportOptionsPlist "$PLIST" \
+              -allowProvisioningUpdates \
+              -authenticationKeyPath "$AUTH_KEY_PATH" \
+              -authenticationKeyID "$APPSTORE_API_KEY_ID_CLEAN" \
+              -authenticationKeyIssuerID "$APPSTORE_ISSUER_ID_CLEAN"
+            STATUS=$?
+            set -e
+
+            if [ "$STATUS" -eq 0 ]; then
+              IPA="$(find "$EXPORT_DIR" -name '*.ipa' | head -1)"
+              if [ -n "$IPA" ]; then
+                echo "IPA_PATH=$IPA" >> "$GITHUB_ENV"
+                exit 0
+              fi
+            fi
+
+            echo "Export failed (exit ${STATUS})."
+            security find-identity -v -p codesigning | head -10 || true
+            if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
+              echo "Waiting 45s before retry..."
+              sleep 45
+            fi
+          done
+
+          echo "Export failed after ${MAX_ATTEMPTS} attempts."
+          echo "よくある原因: API キーが Admin でない / Apple 側の一時障害 → 数分後に Run workflow を再実行"
+          exit 70
 
       - name: Upload to TestFlight
         run: |
