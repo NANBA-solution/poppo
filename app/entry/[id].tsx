@@ -158,31 +158,25 @@ export default function EntryDetailScreen() {
           </View>
 
           <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-            <View style={styles.sharePrompt}>
-              <Text style={styles.sharePromptTitle}>{t.entry.sharePrompt}</Text>
-              <Text style={styles.sharePromptSub}>{t.entry.shareSub}</Text>
-            </View>
-
             {scanNo != null ? (
               <SocialShareButtons
                 shareRef={shareRef}
                 scanNo={scanNo}
                 disabled={shareBusy || deleting}
                 onBusyChange={setSocialBusy}
-                compact
               />
             ) : null}
 
             <View style={styles.footerRow}>
               <FooterButton
-                label={t.entry.shareCta}
+                label={t.common.share}
                 onPress={handleShare}
                 disabled={shareBusy || socialBusy || deleting}
                 loading={shareBusy}
               />
               <FooterButton
                 label={t.common.delete}
-                variant="ghost"
+                variant="danger"
                 flex={0}
                 onPress={handleDelete}
                 disabled={deleting || shareBusy}
@@ -242,22 +236,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radii.xl,
     borderTopRightRadius: radii.xl,
     ...shadow.floating,
-  },
-  sharePrompt: {
-    gap: 4,
-    paddingHorizontal: 4,
-  },
-  sharePromptTitle: {
-    color: colors.ink,
-    fontSize: 20,
-    fontWeight: '900',
-    letterSpacing: -0.4,
-  },
-  sharePromptSub: {
-    color: colors.textMuted,
-    fontSize: 13,
-    fontWeight: '600',
-    lineHeight: 18,
   },
   footerRow: {
     flexDirection: 'row',

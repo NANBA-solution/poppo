@@ -91,7 +91,7 @@ export function SocialShareButtons({
 
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={t.share.x}
+        accessibilityLabel={t.share.xA11y}
         disabled={isDisabled}
         onPress={() => runShare('x')}
         style={({ pressed }) => [
@@ -108,7 +108,7 @@ export function SocialShareButtons({
           <>
             <AppIcon name="x-logo" size={compact ? 18 : 20} color={colors.ink} />
             <Text style={[styles.btnLabel, styles.xBtnLabel, compact && styles.btnLabelCompact]}>
-              {t.share.x}
+              {t.share.xPost}
             </Text>
           </>
         )}

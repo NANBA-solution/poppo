@@ -1,6 +1,7 @@
 import { ScanDetectOverlay } from '@/components/ScanDetectOverlay';
 import { ScanResultCard } from '@/components/ScanResultCard';
 import { useI18n } from '@/i18n/I18nProvider';
+import { formatScanSticker } from '@/utils/scanLabel';
 import { borders, colors, radii, shadow } from '@/theme/tokens';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as React from 'react';
@@ -95,7 +96,7 @@ export function ShareCaptureFrame({
       {ugc && phase === 'success' && scanNo != null ? (
         <View style={styles.sticker} pointerEvents="none">
           <Text style={styles.stickerText}>
-            {scanNo === 1 ? t.entry.stickerFirst : `#${String(scanNo).padStart(3, '0')}`}
+            {formatScanSticker(scanNo, t)}
           </Text>
         </View>
       ) : null}
