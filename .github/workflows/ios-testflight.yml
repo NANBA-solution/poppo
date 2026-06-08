@@ -20,6 +20,7 @@ on:
       - "package-lock.json"
       - "babel.config.js"
       - "index.js"
+      - "plugins/**"
       - ".github/workflows/ios-testflight.yml"
       - "ci/**"
 
@@ -55,6 +56,25 @@ jobs:
         run: |
           cd ios
           LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 pod install
+
+      - name: Patch fmt for Xcode 26
+        run: |
+          FMT_BASE="ios/Pods/fmt/include/fmt/base.h"
+          test -f "$FMT_BASE" || (echo "fmt base.h not found" && exit 1)
+          ruby -e "
+            path = 'ios/Pods/fmt/include/fmt/base.h'
+            marker = 'Xcode 26 workaround'
+            content = File.read(path)
+            exit if content.include?(marker)
+            patched = content.gsub(
+              /(#elif defined\(__cpp_consteval\)\n#  define FMT_USE_CONSTEVAL) 1/,
+              \"\\1 0 // #{marker}\"
+            )
+            abort 'fmt patch pattern not found' if patched == content
+            File.chmod(0644, path)
+            File.write(path, patched)
+            puts 'Patched fmt for Xcode 26'
+          "
 
       - name: Resolve Xcode workspace
         run: |

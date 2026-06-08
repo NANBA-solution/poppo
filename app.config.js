@@ -48,6 +48,7 @@ module.exports = {
     },
     plugins: [
       ...(require('./app.json').expo.plugins ?? []),
+      './plugins/withXcode26FmtFix.js',
       [
         'expo-build-properties',
         {
