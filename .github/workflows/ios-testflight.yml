@@ -119,6 +119,7 @@ jobs:
       - name: Archive
         run: |
           ARCHIVE_PATH="$RUNNER_TEMP/poppo.xcarchive"
+          set +e
           xcodebuild archive \
             -workspace "$PROJECT_WORKSPACE" \
             -scheme "$SCHEME" \
@@ -131,7 +132,20 @@ jobs:
             -allowProvisioningUpdates \
             -authenticationKeyPath "$AUTH_KEY_PATH" \
             -authenticationKeyID "$APPSTORE_API_KEY_ID_CLEAN" \
-            -authenticationKeyIssuerID "$APPSTORE_ISSUER_ID_CLEAN"
+            -authenticationKeyIssuerID "$APPSTORE_ISSUER_ID_CLEAN" \
+            2>&1 | tee /tmp/xcodebuild-archive.log
+          ARCHIVE_STATUS=${PIPESTATUS[0]}
+          set -e
+          if [ "$ARCHIVE_STATUS" -ne 0 ]; then
+            if rg -q "maximum number of certificates" /tmp/xcodebuild-archive.log; then
+              echo ""
+              echo "::error::Apple Developer の証明書が上限です。"
+              echo "https://developer.apple.com/account/resources/certificates/list"
+              echo "古い Created via API 証明書を Revoke してから Run workflow を再実行してください。"
+              echo "手順: ci/GITHUB_SETUP.md の §8"
+            fi
+            exit "$ARCHIVE_STATUS"
+          fi
           echo "ARCHIVE_PATH=$ARCHIVE_PATH" >> "$GITHUB_ENV"
 
       - name: Export IPA
