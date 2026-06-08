@@ -6,7 +6,7 @@ import { ja } from '@/i18n/locales/ja';
 
 const dictionaries: Record<AppLocale, TranslationTree> = { ja, en };
 
-/** コレクション上のスキャン表示ラベル（例: ポッポ1号） */
+/** コレクション上のスキャン表示ラベル（例: ぽっぽ1号） */
 export function formatScanLabel(n: number, t: TranslationTree): string {
   return formatMessage(t.profile.scanEntry, { n: String(n) });
 }
