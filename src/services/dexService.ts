@@ -1,7 +1,8 @@
+import { DEFAULT_COLLECTION_GOAL } from '@/services/collectionGoalService';
 import type { PigeonEntry } from '@/types/collection';
 
 /** スキャン羽数ベースのコレクション進捗 */
-export function getDexCompletion(entries: PigeonEntry[], goal = 100): {
+export function getDexCompletion(entries: PigeonEntry[], goal = DEFAULT_COLLECTION_GOAL): {
   current: number;
   goal: number;
   percent: number;

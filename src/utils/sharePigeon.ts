@@ -1,7 +1,7 @@
-import { formatMessage } from '@/i18n/format';
 import { en } from '@/i18n/locales/en';
 import { ja, type TranslationTree } from '@/i18n/locales/ja';
 import type { AppLocale } from '@/services/localeService';
+import { buildShareCaption as buildCaption } from '@/utils/scanLabel';
 import * as Clipboard from 'expo-clipboard';
 import * as Sharing from 'expo-sharing';
 import { Platform } from 'react-native';
@@ -13,7 +13,7 @@ function shareStrings(locale: AppLocale) {
 }
 
 export function buildShareCaption(scanNo: number, locale: AppLocale = 'ja'): string {
-  return formatMessage(shareStrings(locale).caption, { n: scanNo });
+  return buildCaption(scanNo, locale);
 }
 
 function isShareCancelled(error: unknown): boolean {

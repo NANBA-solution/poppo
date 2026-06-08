@@ -3,12 +3,15 @@ import { SocialShareButtons } from '@/components/SocialShareButtons';
 import { ActionFooter, FooterButton } from '@/components/ui/ActionFooter';
 import { Screen } from '@/components/ui/Screen';
 import { formatMessage } from '@/i18n/format';
+import { formatScanLabel } from '@/utils/scanLabel';
 import { useI18n } from '@/i18n/I18nProvider';
 import {
   getPigeonCollection,
   getPigeonCount,
   savePigeonScan,
 } from '@/services/collectionService';
+import { handleScanGoalAchievement } from '@/services/collectionGoalService';
+import { notifyGoalReached } from '@/services/collectionGoalNotificationService';
 import { notifyQuestsCompleted } from '@/services/questNotificationService';
 import { detectNewQuests, getQuestTitle } from '@/services/questService';
 import { recognizePigeonLocally } from '@/services/pigeonDetectService';
@@ -115,6 +118,17 @@ export default function ResultScreen() {
             void playQuestComplete();
             void notifyQuestsCompleted(questTitles, t, locale);
           }
+          const goalAchievement = await handleScanGoalAchievement(
+            before.length,
+            after.length,
+          );
+          if (goalAchievement) {
+            void notifyGoalReached(
+              goalAchievement.completedGoal,
+              goalAchievement.nextGoal,
+              t,
+            );
+          }
         }
       } catch (e) {
         if (!cancelled) {
@@ -175,11 +189,13 @@ export default function ResultScreen() {
             <ShareCaptureFrame
               imageUri={displayUri}
               phase={cardPhase}
+              scanNo={phase === 'success' ? scanNo : null}
               headline={
                 phase === 'success' && scanNo != null
-                  ? formatMessage(t.profile.scanEntry, { n: scanNo })
+                  ? formatScanLabel(scanNo, t)
                   : undefined
               }
+              ugc={phase === 'success'}
               error={saveError}
               errorTitle={errorTitle}
               subtitle={phase === 'success' ? t.scan.saved : undefined}

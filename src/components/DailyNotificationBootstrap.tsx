@@ -34,6 +34,7 @@ export function DailyNotificationBootstrap() {
     return registerNotificationResponse((url) => {
       if (url === '/camera') router.push('/camera');
       if (url === '/quests') router.push('/quests');
+      if (url === '/collection') router.push('/collection');
     });
   }, [router]);
 
@@ -45,6 +46,7 @@ export function DailyNotificationBootstrap() {
       const url = response?.notification.request.content.data?.url;
       if (url === '/camera') router.push('/camera');
       if (url === '/quests') router.push('/quests');
+      if (url === '/collection') router.push('/collection');
     })();
   }, [router]);
 

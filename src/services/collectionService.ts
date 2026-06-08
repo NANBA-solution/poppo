@@ -4,6 +4,7 @@ import {
   readAllLocal,
   savePigeonScanLocal,
 } from '@/services/collectionService.local';
+import { resetCollectionGoal } from '@/services/collectionGoalService';
 import type { PigeonEntry } from '@/types/collection';
 import type { PigeonScanJson } from '@/types/scan';
 
@@ -43,5 +44,7 @@ export async function deletePigeonScan(id: string): Promise<boolean> {
 }
 
 export async function clearAllCollection(): Promise<number> {
-  return clearAllCollectionLocal();
+  const count = await clearAllCollectionLocal();
+  await resetCollectionGoal();
+  return count;
 }

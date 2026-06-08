@@ -19,6 +19,7 @@ type SocialShareButtonsProps = {
   scanNo: number;
   disabled?: boolean;
   onBusyChange?: (busy: boolean) => void;
+  compact?: boolean;
 };
 
 export function SocialShareButtons({
@@ -26,6 +27,7 @@ export function SocialShareButtons({
   scanNo,
   disabled = false,
   onBusyChange,
+  compact = false,
 }: SocialShareButtonsProps) {
   const { t, locale } = useI18n();
   const [busy, setBusy] = React.useState<'instagram' | 'x' | null>(null);
@@ -69,6 +71,7 @@ export function SocialShareButtons({
         onPress={() => runShare('instagram')}
         style={({ pressed }) => [
           styles.btn,
+          compact ? styles.btnCompact : styles.btnTall,
           styles.instagramBtn,
           pressed && styles.pressed,
           isDisabled && styles.disabled,
@@ -78,8 +81,10 @@ export function SocialShareButtons({
           <ActivityIndicator color="#fff" />
         ) : (
           <>
-            <AppIcon name="instagram" size={22} color="#fff" />
-            <Text style={styles.btnLabel}>{t.share.instagram}</Text>
+            <AppIcon name="instagram" size={compact ? 20 : 22} color="#fff" />
+            <Text style={[styles.btnLabel, compact && styles.btnLabelCompact]}>
+              {t.share.instagram}
+            </Text>
           </>
         )}
       </Pressable>
@@ -91,6 +96,7 @@ export function SocialShareButtons({
         onPress={() => runShare('x')}
         style={({ pressed }) => [
           styles.btn,
+          compact ? styles.btnCompact : styles.btnTall,
           styles.xBtn,
           pressed && styles.pressed,
           isDisabled && styles.disabled,
@@ -100,8 +106,10 @@ export function SocialShareButtons({
           <ActivityIndicator color={colors.ink} />
         ) : (
           <>
-            <AppIcon name="x-logo" size={20} color={colors.ink} />
-            <Text style={[styles.btnLabel, styles.xBtnLabel]}>{t.share.x}</Text>
+            <AppIcon name="x-logo" size={compact ? 18 : 20} color={colors.ink} />
+            <Text style={[styles.btnLabel, styles.xBtnLabel, compact && styles.btnLabelCompact]}>
+              {t.share.x}
+            </Text>
           </>
         )}
       </Pressable>
@@ -116,13 +124,23 @@ const styles = StyleSheet.create({
   },
   btn: {
     flex: 1,
-    minHeight: 64,
-    borderRadius: radii.md,
+    borderRadius: radii.pill,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 14,
+    gap: 8,
+  },
+  btnTall: {
+    minHeight: 64,
     paddingVertical: 10,
-    paddingHorizontal: 8,
+    flexDirection: 'column',
     gap: 6,
+    borderRadius: radii.md,
+  },
+  btnCompact: {
+    minHeight: 48,
+    paddingVertical: 12,
   },
   instagramBtn: {
     backgroundColor: '#E1306C',
@@ -138,6 +156,10 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     textAlign: 'center',
     lineHeight: 16,
+  },
+  btnLabelCompact: {
+    fontSize: 14,
+    lineHeight: 18,
   },
   xBtnLabel: {
     color: colors.ink,

@@ -1,7 +1,7 @@
 import { ScanDetectOverlay } from '@/components/ScanDetectOverlay';
 import { ScanResultCard } from '@/components/ScanResultCard';
 import { useI18n } from '@/i18n/I18nProvider';
-import { borders, colors } from '@/theme/tokens';
+import { borders, colors, radii, shadow } from '@/theme/tokens';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as React from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
@@ -13,8 +13,11 @@ type ShareCaptureFrameProps = {
   error?: string | null;
   errorTitle?: string;
   subtitle?: string;
+  scanNo?: number | null;
   /** 透かし・ブランド帯なしのシンプル表示 */
   minimal?: boolean;
+  /** UGC 向けステッカー・カード */
+  ugc?: boolean;
 };
 
 /** view-shot でキャプチャするシェア用フレーム（ブランド帯付き） */
@@ -25,7 +28,9 @@ export function ShareCaptureFrame({
   error,
   errorTitle,
   subtitle,
+  scanNo = null,
   minimal = false,
+  ugc = false,
 }: ShareCaptureFrameProps) {
   const { t } = useI18n();
   const [fxVisible, setFxVisible] = React.useState(phase === 'loading');
@@ -76,12 +81,24 @@ export function ShareCaptureFrame({
 
       {minimal && phase !== 'loading' && (
         <LinearGradient
-          colors={['transparent', 'rgba(26,26,26,0.35)', colors.paper]}
-          locations={[0, 0.45, 1]}
+          colors={
+            ugc
+              ? ['transparent', 'rgba(26,26,26,0.2)', 'rgba(245,241,234,0.92)']
+              : ['transparent', 'rgba(26,26,26,0.35)', colors.paper]
+          }
+          locations={[0, 0.42, 1]}
           style={styles.bottomScrim}
           pointerEvents="none"
         />
       )}
+
+      {ugc && phase === 'success' && scanNo != null ? (
+        <View style={styles.sticker} pointerEvents="none">
+          <Text style={styles.stickerText}>
+            {scanNo === 1 ? t.entry.stickerFirst : `#${String(scanNo).padStart(3, '0')}`}
+          </Text>
+        </View>
+      ) : null}
 
       {phase === 'success' && (
         <View
@@ -94,10 +111,17 @@ export function ShareCaptureFrame({
             error={error}
             errorTitle={errorTitle}
             subtitle={subtitle}
-            showEyebrow={!minimal}
+            showEyebrow={!minimal || ugc}
+            variant={ugc ? 'ugc' : 'default'}
           />
         </View>
       )}
+
+      {ugc && phase === 'success' ? (
+        <View style={styles.watermark} pointerEvents="none">
+          <Text style={styles.watermarkText}>POPPO</Text>
+        </View>
+      ) : null}
 
       {!minimal && (
         <View style={styles.brandBar} pointerEvents="none">
@@ -178,5 +202,36 @@ const styles = StyleSheet.create({
     color: 'rgba(250,244,234,0.75)',
     fontSize: 11,
     fontWeight: '700',
+  },
+  sticker: {
+    position: 'absolute',
+    top: 20,
+    left: 18,
+    transform: [{ rotate: '-4deg' }],
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radii.pill,
+    backgroundColor: colors.surfaceSolid,
+    borderWidth: borders.medium,
+    borderColor: colors.ink,
+    ...shadow.floating,
+  },
+  stickerText: {
+    color: colors.ink,
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 0.6,
+  },
+  watermark: {
+    position: 'absolute',
+    top: 22,
+    right: 18,
+    opacity: 0.42,
+  },
+  watermarkText: {
+    color: colors.onAccent,
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 4,
   },
 });

@@ -6,7 +6,9 @@ import { formatMessage } from '@/i18n/format';
 import { useI18n } from '@/i18n/I18nProvider';
 import { borders, colors } from '@/theme/tokens';
 import { formatShortDateTime } from '@/utils/formatDate';
+import { formatScanLabel } from '@/utils/scanLabel';
 import { getPlayerTitle } from '@/services/titleService';
+import { useCollectionGoal } from '@/hooks/useCollectionGoal';
 import { getDexCompletion } from '@/services/dexService';
 import type { PigeonEntry } from '@/types/collection';
 import { hapticLight } from '@/utils/haptics';
@@ -73,7 +75,11 @@ export default function ProfileScreen() {
     });
   }, []);
 
-  const dexCompletion = React.useMemo(() => getDexCompletion(entries), [entries]);
+  const collectionGoal = useCollectionGoal(entries.length);
+  const dexCompletion = React.useMemo(
+    () => getDexCompletion(entries, collectionGoal),
+    [entries, collectionGoal],
+  );
   const playerTitle = getPlayerTitle(entries.length, t);
   const visibleEntries = React.useMemo(
     () => sortEntries(entries, sort),
@@ -203,16 +209,14 @@ export default function ProfileScreen() {
           renderItem={({ item, index }) => (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={formatMessage(t.profile.scanEntry, {
-                n: visibleEntries.length - index,
-              })}
+              accessibilityLabel={formatScanLabel(visibleEntries.length - index, t)}
               onPress={() => router.push({ pathname: '/entry/[id]', params: { id: item.id } })}
               style={({ pressed }) => [styles.card, pressed && styles.pressed]}
             >
               <Image source={{ uri: item.imageUri }} style={styles.thumb} />
               <View style={styles.cardBody}>
                 <Text style={styles.cardBreed}>
-                  {formatMessage(t.profile.scanEntry, { n: visibleEntries.length - index })}
+                  {formatScanLabel(visibleEntries.length - index, t)}
                 </Text>
                 <Text style={styles.cardDate}>
                   {formatShortDateTime(item.scannedAt, locale)}

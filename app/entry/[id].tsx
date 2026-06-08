@@ -1,9 +1,7 @@
+import { AppIcon } from '@/components/icons/AppIcon';
 import { ShareCaptureFrame } from '@/components/ShareCaptureFrame';
 import { SocialShareButtons } from '@/components/SocialShareButtons';
-import { ActionFooter, FooterButton } from '@/components/ui/ActionFooter';
-import { Screen } from '@/components/ui/Screen';
-import { ScreenHeader } from '@/components/ui/ScreenHeader';
-import { formatMessage } from '@/i18n/format';
+import { FooterButton } from '@/components/ui/ActionFooter';
 import { useI18n } from '@/i18n/I18nProvider';
 import {
   deletePigeonScan,
@@ -12,8 +10,9 @@ import {
   getScanNumber,
 } from '@/services/collectionService';
 import type { PigeonEntry } from '@/types/collection';
-import { colors } from '@/theme/tokens';
+import { borders, colors, radii, shadow } from '@/theme/tokens';
 import { formatDateTime } from '@/utils/formatDate';
+import { formatScanLabel } from '@/utils/scanLabel';
 import { sharePigeonImageWithFallback } from '@/utils/sharePigeon';
 import { useTabRouter } from '@/hooks/useTabRouter';
 import { useLocalSearchParams } from 'expo-router';
@@ -21,6 +20,7 @@ import * as React from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -117,14 +117,10 @@ export default function EntryDetailScreen() {
   }, [deleting, entry, router, t.common.cancel, t.common.delete, t.common.error, t.entry.deleteBody, t.entry.deleteError, t.entry.deleteTitle]);
 
   return (
-    <Screen edges={false} pigeons={false}>
-      <View style={{ paddingTop: insets.top }}>
-        <ScreenHeader title={t.entry.title} />
-      </View>
-
+    <View style={styles.screen}>
       {loading ? (
         <View style={styles.centered}>
-          <ActivityIndicator color={colors.accent} />
+          <ActivityIndicator color={colors.onAccent} />
         </View>
       ) : !entry ? (
         <View style={styles.centered}>
@@ -132,55 +128,79 @@ export default function EntryDetailScreen() {
         </View>
       ) : (
         <>
-          <View style={styles.stage}>
+          <View style={styles.hero}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t.common.back}
+              onPress={() => router.back()}
+              style={({ pressed }) => [
+                styles.backBtn,
+                { top: insets.top + 10 },
+                pressed && styles.pressed,
+              ]}
+            >
+              <AppIcon name="chevron-left" size={18} color={colors.ink} />
+            </Pressable>
+
             <View ref={shareRef} style={styles.shareWrap} collapsable={false}>
               <ShareCaptureFrame
                 imageUri={entry.imageUri}
                 phase="success"
+                scanNo={scanNo}
                 headline={
-                  scanNo != null
-                    ? formatMessage(t.profile.scanEntry, { n: scanNo })
-                    : undefined
+                  scanNo != null ? formatScanLabel(scanNo, t) : undefined
                 }
                 subtitle={formatDateTime(entry.scannedAt, locale)}
                 minimal
+                ugc
               />
             </View>
           </View>
 
-          <ActionFooter>
+          <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+            <View style={styles.sharePrompt}>
+              <Text style={styles.sharePromptTitle}>{t.entry.sharePrompt}</Text>
+              <Text style={styles.sharePromptSub}>{t.entry.shareSub}</Text>
+            </View>
+
             {scanNo != null ? (
               <SocialShareButtons
                 shareRef={shareRef}
                 scanNo={scanNo}
                 disabled={shareBusy || deleting}
                 onBusyChange={setSocialBusy}
+                compact
               />
             ) : null}
+
             <View style={styles.footerRow}>
               <FooterButton
-                label={t.common.share}
+                label={t.entry.shareCta}
                 onPress={handleShare}
                 disabled={shareBusy || socialBusy || deleting}
                 loading={shareBusy}
               />
               <FooterButton
                 label={t.common.delete}
-                variant="danger"
+                variant="ghost"
                 flex={0}
                 onPress={handleDelete}
                 disabled={deleting || shareBusy}
                 loading={deleting}
               />
             </View>
-          </ActionFooter>
+          </View>
         </>
       )}
-    </Screen>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: colors.ink,
+  },
   centered: {
     flex: 1,
     justifyContent: 'center',
@@ -188,19 +208,64 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   missing: {
-    color: colors.textMuted,
+    color: 'rgba(255,255,255,0.72)',
     fontSize: 16,
     textAlign: 'center',
   },
-  stage: {
+  hero: {
     flex: 1,
     minHeight: 0,
+    backgroundColor: colors.ink,
+  },
+  backBtn: {
+    position: 'absolute',
+    left: 16,
+    zIndex: 10,
+    width: 44,
+    height: 44,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderWidth: borders.thin,
+    borderColor: 'rgba(26,26,26,0.08)',
+    ...shadow.subtle,
   },
   shareWrap: {
     flex: 1,
   },
+  footer: {
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    gap: 12,
+    backgroundColor: colors.paper,
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
+    ...shadow.floating,
+  },
+  sharePrompt: {
+    gap: 4,
+    paddingHorizontal: 4,
+  },
+  sharePromptTitle: {
+    color: colors.ink,
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: -0.4,
+  },
+  sharePromptSub: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
   footerRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
+    alignItems: 'center',
+  },
+  pressed: {
+    opacity: 0.88,
+    transform: [{ scale: 0.96 }],
   },
 });

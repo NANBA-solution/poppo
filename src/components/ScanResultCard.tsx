@@ -10,6 +10,9 @@ type ScanResultCardProps = {
   errorTitle?: string;
   subtitle?: string;
   showEyebrow?: boolean;
+  /** UGC 向けの大きめカード */
+  variant?: 'default' | 'ugc';
+  eyebrow?: string;
 };
 
 export function ScanResultCard({
@@ -19,8 +22,11 @@ export function ScanResultCard({
   errorTitle,
   subtitle,
   showEyebrow = true,
+  variant = 'default',
+  eyebrow,
 }: ScanResultCardProps) {
   const { t } = useI18n();
+  const isUgc = variant === 'ugc';
 
   if (phase === 'loading') {
     return (
@@ -32,11 +38,21 @@ export function ScanResultCard({
   }
 
   if (phase === 'success') {
+    const eyebrowText = eyebrow ?? (isUgc ? t.profile.scanEntryEyebrow : t.scan.eyebrow);
     return (
-      <View style={styles.card}>
-        {showEyebrow ? <Text style={styles.cardEyebrow}>{t.scan.eyebrow}</Text> : null}
-        {headline ? <Text style={styles.cardHeadline}>{headline}</Text> : null}
-        <Text style={headline ? styles.cardSubtitle : styles.cardHeadline}>
+      <View style={[styles.card, isUgc && styles.cardUgc]}>
+        {showEyebrow ? (
+          <Text style={[styles.cardEyebrow, isUgc && styles.cardEyebrowUgc]}>{eyebrowText}</Text>
+        ) : null}
+        {headline ? (
+          <Text style={[styles.cardHeadline, isUgc && styles.cardHeadlineUgc]}>{headline}</Text>
+        ) : null}
+        <Text
+          style={[
+            headline ? styles.cardSubtitle : styles.cardHeadline,
+            isUgc && styles.cardSubtitleUgc,
+          ]}
+        >
           {subtitle ?? t.scan.saved}
         </Text>
       </View>
@@ -107,5 +123,28 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 13,
     lineHeight: 19,
+  },
+  cardUgc: {
+    borderRadius: radii.xl,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    borderColor: 'rgba(26,26,26,0.06)',
+    ...shadow.floating,
+  },
+  cardEyebrowUgc: {
+    color: colors.accentPurple,
+    letterSpacing: 2.4,
+    fontSize: 10,
+  },
+  cardHeadlineUgc: {
+    fontSize: 28,
+    lineHeight: 34,
+    letterSpacing: -0.6,
+  },
+  cardSubtitleUgc: {
+    fontSize: 13,
+    fontWeight: '500',
+    letterSpacing: 0.2,
   },
 });

@@ -2,9 +2,11 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { Screen } from '@/components/ui/Screen';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { formatMessage } from '@/i18n/format';
+import { formatScanLabel } from '@/utils/scanLabel';
 import { useI18n } from '@/i18n/I18nProvider';
 import { useTabRouter } from '@/hooks/useTabRouter';
 import { getPigeonCollection } from '@/services/collectionService';
+import { useCollectionGoal } from '@/hooks/useCollectionGoal';
 import { getDexCompletion } from '@/services/dexService';
 import { getPlayerTitle } from '@/services/titleService';
 import { colors, radii, spacing } from '@/theme/tokens';
@@ -45,7 +47,8 @@ export default function CollectionScreen() {
     }, []),
   );
 
-  const completion = getDexCompletion(entries);
+  const collectionGoal = useCollectionGoal(entries.length);
+  const completion = getDexCompletion(entries, collectionGoal);
   const playerTitle = getPlayerTitle(entries.length, t);
 
   return (
@@ -89,7 +92,7 @@ export default function CollectionScreen() {
                     <Image source={{ uri: item.imageUri }} style={styles.thumb} />
                     <View style={styles.cardBody}>
                       <Text style={styles.scanNo}>
-                        {formatMessage(t.profile.scanEntry, { n: scanNo })}
+                        {formatScanLabel(scanNo, t)}
                       </Text>
                       <Text style={styles.meta}>
                         {formatShortDateTime(item.scannedAt, locale)}
