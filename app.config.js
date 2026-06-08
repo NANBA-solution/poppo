@@ -45,6 +45,15 @@ module.exports = {
     plugins: [
       ...(require('./app.json').expo.plugins ?? []),
       [
+        'expo-build-properties',
+        {
+          ios: {
+            // ML Kit ImageLabeling pod は 15.5 以上が必要
+            deploymentTarget: '15.5',
+          },
+        },
+      ],
+      [
         'expo-notifications',
         {
           icon: './assets/brand-icon.png',

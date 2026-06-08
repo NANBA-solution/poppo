@@ -24,6 +24,7 @@
     "open:ios:device": "bash scripts/open-ios-device.sh",
     "build:dev:ios:sim": "REACT_NATIVE_PACKAGER_HOSTNAME=127.0.0.1 expo run:ios --device 9854EA71-D57B-42F5-BC91-27F5F67617AC",
     "build:dev:ios:cloud": "eas build --profile development --platform ios",
+    "build:preview:ios:cloud": "eas build --profile preview --platform ios",
     "build:dev:android": "expo run:android --device",
     "build:dev:android:local": "expo run:android"
   },
@@ -35,6 +36,7 @@
     "expo": "~54.0.33",
     "expo-apple-authentication": "~8.0.8",
     "expo-av": "~16.0.8",
+    "expo-build-properties": "~1.0.10",
     "expo-camera": "~17.0.10",
     "expo-clipboard": "~8.0.8",
     "expo-constants": "~18.0.13",
