@@ -83,6 +83,11 @@ GitHub → **Actions** → **iOS TestFlight Upload** → **Run workflow** → br
 | マーケティングバージョン | `app.json` の `expo.version` | ストアに新バージョンとして出すとき |
 | ビルド番号 | CI が `github.run_number` で自動設定 | push のたびに増加 |
 
+## Xcode プロジェクト名
+
+Expo prebuild 後は `ios/app.xcworkspace` / scheme `app` です（slug ではなく `app`）。  
+ワークフローは pod install 後に自動検出します。
+
 ## 日常フロー
 
 ```

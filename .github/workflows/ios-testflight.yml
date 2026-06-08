@@ -34,8 +34,6 @@ jobs:
     env:
       CI_RELEASE: "1"
       NODE_VERSION: "20"
-      PROJECT_WORKSPACE: ios/poppo.xcworkspace
-      SCHEME: poppo
       BUNDLE_ID: app.poppo.mobile
     steps:
       - name: Checkout
@@ -57,6 +55,16 @@ jobs:
         run: |
           cd ios
           LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 pod install
+
+      - name: Resolve Xcode workspace
+        run: |
+          WORKSPACE="$(find ios -maxdepth 1 -name '*.xcworkspace' -print -quit)"
+          test -n "$WORKSPACE" || (echo "xcworkspace が見つかりません" && ls -la ios && exit 1)
+          SCHEME="$(basename "$WORKSPACE" .xcworkspace)"
+          echo "PROJECT_WORKSPACE=$WORKSPACE" >> "$GITHUB_ENV"
+          echo "SCHEME=$SCHEME" >> "$GITHUB_ENV"
+          echo "Using workspace=$WORKSPACE scheme=$SCHEME"
+          xcodebuild -list -workspace "$WORKSPACE" | head -20
 
       - name: Select Xcode 26
         run: |
