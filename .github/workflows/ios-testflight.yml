@@ -1,5 +1,5 @@
 # ぽっぽ（poppo）— macOS 26 + Xcode 26 で prebuild → Archive → TestFlight
-# ローカル Archive 不要。push main または手動 Run workflow。
+# ローカル Archive 不要。Actions → Run workflow で手動実行のみ。
 #
 # 初回: ci/GITHUB_SETUP.md — GitHub Secrets 4 つ（Admin API キー必須）
 
@@ -7,22 +7,6 @@ name: iOS TestFlight Upload
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "app/**"
-      - "src/**"
-      - "assets/**"
-      - "modules/**"
-      - "app.json"
-      - "app.config.js"
-      - "package.json"
-      - "package-lock.json"
-      - "babel.config.js"
-      - "index.js"
-      - "plugins/**"
-      - ".github/workflows/ios-testflight.yml"
-      - "ci/**"
 
 concurrency:
   group: ios-testflight-${{ github.ref }}

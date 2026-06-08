@@ -165,10 +165,10 @@ export default function SettingsScreen() {
         <Text style={styles.sectionTitle}>{t.settings.notifications}</Text>
         <GlassCard style={styles.cardStack}>
           <View style={styles.switchRow}>
-            <View style={styles.switchCopy}>
-              <Text style={styles.rowLabel}>{t.settings.dailyNotifications}</Text>
-              <Text style={styles.rowHint}>{t.settings.dailyNotificationsHint}</Text>
-            </View>
+            <Text style={styles.rowLabel}>{t.settings.notifications}</Text>
+            <Text style={styles.rowValue}>
+              {notificationsOn ? t.settings.notificationsOn : t.settings.notificationsOff}
+            </Text>
             <Switch
               value={notificationsOn}
               onValueChange={(value) => void handleNotificationsToggle(value)}
@@ -269,16 +269,6 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 12,
     paddingHorizontal: 4,
-  },
-  switchCopy: {
-    flex: 1,
-    gap: 4,
-  },
-  rowHint: {
-    color: colors.textMuted,
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '500',
   },
   pressed: {
     opacity: 0.9,
