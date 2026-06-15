@@ -3,7 +3,7 @@
     "name": "poppo",
     "slug": "poppo",
     "scheme": "poppo",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/brand-icon.png",
     "userInterfaceStyle": "light",
