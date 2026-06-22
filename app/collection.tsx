@@ -52,7 +52,7 @@ export default function CollectionScreen() {
   ).length;
 
   return (
-    <Screen edges={false}>
+    <Screen edges={false} pigeons={false}>
       <View style={{ paddingTop: insets.top }}>
         <ScreenHeader title={t.profile.collectionTitle} />
       </View>
@@ -66,7 +66,8 @@ export default function CollectionScreen() {
           data={entries}
           keyExtractor={(item) => item.id}
           numColumns={2}
-          columnWrapperStyle={styles.row}
+          showsVerticalScrollIndicator={false}
+          columnWrapperStyle={entries.length > 0 ? styles.row : undefined}
           contentContainerStyle={[
             styles.listContent,
             { paddingBottom: insets.bottom + 24 },
@@ -123,15 +124,17 @@ export default function CollectionScreen() {
 const styles = StyleSheet.create({
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   listContent: {
-    paddingHorizontal: spacing.lg,
-    gap: spacing.sm,
-  },
-  row: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
     gap: spacing.md,
   },
+  row: {
+    gap: spacing.sm,
+  },
   hero: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
     gap: 6,
+    paddingHorizontal: spacing.xs,
   },
   heroTitle: { color: colors.ink, fontSize: 20, fontWeight: '900' },
   heroSub: { color: colors.textMuted, fontSize: 14 },
@@ -156,5 +159,6 @@ const styles = StyleSheet.create({
   cardCell: {
     flex: 1,
     maxWidth: '50%',
+    paddingHorizontal: 2,
   },
 });

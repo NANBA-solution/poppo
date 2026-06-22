@@ -3,8 +3,8 @@
 | 項目 | 内容 |
 |------|------|
 | 製品名 | ぽっぽ（POPPO） |
-| バージョン | 1.0.0 |
-| 最終更新 | 2026-06-06 |
+| バージョン | 1.0.1 |
+| 最終更新 | 2026-06-22 |
 | プラットフォーム | iOS / Android（Expo dev client 前提） |
 | ドキュメント種別 | 現行実装に基づく PRD |
 
@@ -25,6 +25,7 @@
 - **即時判定**: ネット不要。端末内 ML Kit でハトかどうかをその場で判定
 - **ローカル完結**: 写真・データは端末内のみ。ログイン・クラウド同期不要
 - **第 N 羽**: 品種ではなく通し番号でコレクションを愛でる
+- **レアカード体験**: 保存時にレアリティ抽選。トレカ風 UI で質感あるカード表示
 - **シュールな遊び心**: クエスト・称号・通知文言が理不尽で面白い
 
 ### 1.4 ターゲットユーザー
@@ -49,6 +50,8 @@
 | カメラ撮影 | 実機カメラ、シミュレータでは写真ピッカー |
 | ハト判定 | ML Kit 画像ラベリング（端末内） |
 | コレクション | ローカル保存、一覧、詳細、削除 |
+| レアリティ | 保存時抽選（N / R / SR / UR / SECRET）、条件保証・天井 |
+| カード UI | `PigeonCard` トレカ風表示（コレクション・詳細・結果・シェア） |
 | プロフィール | 統計、称号、スキャン一覧 |
 | クエスト | 64 種類の達成条件（報酬なし） |
 | シェア | 画像キャプチャ + 共有シート / Instagram / X |
@@ -87,9 +90,10 @@
   → シャッター（鳩 MP3 + ハプティクス）
   → /result?uri=...
        ├─ loading: ML Kit でハト判定 + ScanDetectOverlay 演出
-       ├─ success: ローカル保存（breed=「未判定」）→ 第 N 羽表示
+       ├─ success: ローカル保存（breed=「未判定」）→ レア抽選 → カード表示
+       │     ├─ レア出現バナー（R 以上）
        │     ├─ 詳細へ /entry/[id]
-       │     └─ シェア（画像 + キャプション「第{n}羽をゲット！」）
+       │     └─ シェア（PigeonCard キャプチャ + キャプション）
        ├─ error（非ハト）: NotPigeonError → 撮り直し案内
        └─ error（その他）: 再確認ボタン
 ```
@@ -157,8 +161,21 @@
   imageUri: string;    // アプリ内永続パス
   breed: string;       // 常に「未判定」（スキーマ互換のため残存）
   scannedAt: string;   // ISO 8601
+  rarity?: CardRarity;     // N | R | SR | UR | SECRET（保存時確定）
+  flavorIndex?: number;    // t.card.flavors[rarity] のインデックス
 }
 ```
+
+**レアリティ（`rarityService`）**
+
+| 項目 | 内容 |
+|------|------|
+| 抽選 | 新規保存時 `rollRarityForNewScan`（ランダム + 条件床 + 天井） |
+| 確率（床適用前） | SECRET 1% / UR 3% / SR 9% / R 22% / N 65% |
+| 条件床 | 初回 UR、マイルストーン番号 SR+、深夜 R+、0時 SR+、金曜13日 SR+、うるう日 UR+、4:44・3:33 SECRET 等 |
+| 天井 | 前回 SR 以上から 25 枚で SR 保証 |
+| 旧データ | `ensureEntryRarity` で `entryId` シードにより遡及付与 |
+| わざ | `cardMoveGenerator` で鳩関連技名・説明をシード固定生成 |
 
 **スキャン通し番号**
 
@@ -170,10 +187,10 @@
 | 要件 ID | 説明 |
 |---------|------|
 | RES-01 | 判定中は `ShareCaptureFrame` + `ScanDetectOverlay`（POPPO DETECT 演出） |
-| RES-02 | 成功時カードに「第 N 羽」+「コレクションに保存しました」 |
+| RES-02 | 成功時 `PigeonCard`（share サイズ）+ レア出現バナー +「コレクションに保存しました」 |
 | RES-03 | 成功時 `hapticSuccess()` + 鳩音 |
 | RES-04 | 非ハト時は専用タイトル・本文でエラー表示 |
-| RES-05 | シェア: `react-native-view-shot` でフレームを JPG キャプチャ |
+| RES-05 | シェア: `react-native-view-shot` で `PigeonCard` を JPG キャプチャ |
 | RES-06 | SNS ボタン: Instagram ストーリー / X（キャプションはクリップボードコピー併用） |
 
 ### 4.5 プロフィール（`/profile`）
@@ -183,7 +200,7 @@
 | PRO-01 | ブランドアイコン + 称号（`titleService`）+ 次の称号までの残り羽数 |
 | PRO-02 | 統計チップ: 総スキャン / 目標 100 羽 / 達成率 % |
 | PRO-03 | クイックナビ: コレクション・クエスト |
-| PRO-04 | スキャン一覧: 「第 N 羽」+ 日時、新しい順 / 古い順ソート |
+| PRO-04 | スキャン一覧: 「第 N 羽」+ レアラベル + 日時、新しい順 / 古い順ソート |
 | PRO-05 | 空状態時はカメラへ誘導 CTA |
 | PRO-06 | 設定ボタン → `/settings` |
 
@@ -191,8 +208,8 @@
 
 | 要件 ID | 説明 |
 |---------|------|
-| DEX-01 | 称号 + 進捗 `{current}/{goal} 羽スキャン（{percent}%）` |
-| DEX-02 | 第 N 羽カード一覧（画像・番号・日時） |
+| DEX-01 | 称号 + 進捗 `{current}/{goal} 羽スキャン（{percent}%）` + SR 以上枚数 |
+| DEX-02 | 2 列グリッドの `PigeonCard` 一覧（写真・番号・レア・わざ・フレーバー） |
 | DEX-03 | タップで `/entry/[id]` |
 
 **進捗計算（`getDexCompletion`）**
@@ -204,8 +221,8 @@
 
 | 要件 ID | 説明 |
 |---------|------|
-| ENT-01 | シェア用フレーム（minimal モード）に第 N 羽 + 撮影日時 |
-| ENT-02 | 画像シェア / Instagram / X |
+| ENT-01 | `PigeonCard`（detail サイズ）+ レアラベル |
+| ENT-02 | 画像シェア / Instagram / X（カードキャプチャ） |
 | ENT-03 | コレクションから削除（確認ダイアログ） |
 
 ### 4.8 クエスト（`/quests`）
@@ -309,7 +326,8 @@
 | コンポーネント | 用途 |
 |----------------|------|
 | `Screen` / `ScreenHeader` | 画面骨格 |
-| `GlassCard` | カード UI |
+| `GlassCard` | 汎用サーフェス UI |
+| `PigeonCard` | トレカ風コレクションカード（grid / detail / share） |
 | `FloatingPill` | カメラ下部ナビ |
 | `ActionFooter` / `FooterButton` | 結果・詳細のフッター |
 | `ScanDetectOverlay` | 判定中 HUD 演出 |
@@ -323,6 +341,7 @@
 - アプリアイコン: `assets/brand-icon.png`
 - スプラッシュ: `assets/splash-icon.png`（背景 `#F5F1EA`）
 - オンボーディング: `assets/onboarding/onboarding-v3-{scan,detect,collection}.png`
+- App Store スクリーンショット: `app-store-screenshots/{6.5-inch,6.7-inch}/`（01 オンボ ×3、04 クエスト、05 プロフィール）
 
 ---
 
@@ -424,7 +443,8 @@
 - 品種判定の復活（オプトイン）
 - iCloud / 手動バックアップ
 - Android 実機 QA 強化
-- TestFlight / ストア公開フロー整備
+- 背景削除・鳩切り抜き（カード用）
+- カード画像の事前レンダリング保存
 
 ---
 
@@ -438,6 +458,8 @@
 | コレクション | 保存済みぽっぽの一覧（旧称「図鑑」「dex」） |
 | 未判定 | 品種不明の固定ラベル（`breed` フィールド値） |
 | 理不尽クエスト | 達成しても報酬がないクエスト群 |
+| レアリティ | N / R / SR / UR / SECRET の 5 段階。保存時に確定 |
+| ぽっぽカード | `PigeonCard` で表示する 1 羽分のトレカ風 UI |
 
 ---
 
