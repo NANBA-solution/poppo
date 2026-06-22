@@ -4,7 +4,8 @@
     "strict": true,
     "paths": {
       "@/*": ["./src/*"],
-      "poppo-icons": ["./modules/poppo-icons"]
+      "poppo-icons": ["./modules/poppo-icons"],
+      "poppo-cards": ["./modules/poppo-cards"]
     }
   },
   "include": [

@@ -1,0 +1,11 @@
+{
+  "name": "poppo-cards",
+  "version": "1.0.0",
+  "description": "SceneKit holographic TCG cards for poppo (iOS)",
+  "main": "index.ts",
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}

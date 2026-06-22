@@ -10,6 +10,7 @@ module.exports = function (api) {
           alias: {
             '@': './src',
             'poppo-icons': './modules/poppo-icons',
+            'poppo-cards': './modules/poppo-cards',
           },
           extensions: ['.ios.js', '.android.js', '.js', '.jsx', '.ts', '.tsx', '.json'],
         },

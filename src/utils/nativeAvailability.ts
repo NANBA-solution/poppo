@@ -32,6 +32,14 @@ export function isSvgNativeAvailable(): boolean {
   return SVG_VIEW_MANAGERS.some((name) => hasViewManager(name));
 }
 
+/** SceneKit ホロカード（PoppoCards ローカルモジュール）が同梱されているか */
+export function isPoppoCardsNativeAvailable(): boolean {
+  if (Platform.OS !== 'ios') {
+    return false;
+  }
+  return requireOptionalNativeModule('PoppoCards') != null;
+}
+
 /** expo-camera が dev client に同梱されているか */
 export function isExpoCameraNativeAvailable(): boolean {
   return requireOptionalNativeModule('ExpoCamera') != null;

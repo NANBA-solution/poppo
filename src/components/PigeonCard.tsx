@@ -2,6 +2,8 @@ import { useI18n } from '@/i18n/I18nProvider';
 import { colors } from '@/theme/tokens';
 import type { CardRarity } from '@/types/collection';
 import { formatScanLabel } from '@/utils/scanLabel';
+import { toHoloCardRarity } from '@/utils/holoCardRarity';
+import { isPoppoCardsNativeAvailable } from '@/utils/nativeAvailability';
 import {
   buildMoveSeed,
   generateCardMoves,
@@ -13,9 +15,11 @@ import {
   getRarityLabel,
 } from '@/utils/rarityLabel';
 import { LinearGradient } from 'expo-linear-gradient';
+import { PoppoHoloCardView } from 'poppo-cards';
 import * as React from 'react';
 import {
   Image,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -132,9 +136,9 @@ const FINISH: Record<CardRarity, RarityFinish> = {
 };
 
 const LAYOUT = {
-  grid: { frame: 5, gap: 4, name: 10, sub: 7, showMove2: false, showMoveDesc: false, flavorLines: 1 },
-  detail: { frame: 7, gap: 5, name: 12, sub: 9, showMove2: true, showMoveDesc: true, flavorLines: 2 },
-  share: { frame: 8, gap: 6, name: 14, sub: 10, showMove2: true, showMoveDesc: true, flavorLines: 2 },
+  grid: { frame: 5, gap: 3, name: 10, sub: 7, artFlex: 1.35, showMove2: false, showMoveDesc: false, flavorLines: 1 },
+  detail: { frame: 6, gap: 4, name: 12, sub: 9, artFlex: 1.25, showMove2: true, showMoveDesc: true, flavorLines: 2 },
+  share: { frame: 7, gap: 5, name: 15, sub: 11, artFlex: 1.28, showMove2: true, showMoveDesc: true, flavorLines: 2 },
 } as const;
 
 function HoloBands({ bands }: { bands: RarityFinish['holoBands'] }) {
@@ -259,9 +263,50 @@ export function PigeonCard({
   const moveSeed = buildMoveSeed(entryId, scanNo, flavorIndex);
   const [move1, move2] = generateCardMoves({ seed: moveSeed, locale, rarity });
   const dmg1 = getCardAttackDamage(rarity, scanNo, 1);
+  const dmg2 = getCardAttackDamage(rarity, scanNo, 2);
   const holoId = `holo-${entryId ?? scanNo}`;
-
   const hasHolo = finish.holoBands.length > 0;
+
+  const useNativeHolo = Platform.OS === 'ios' && isPoppoCardsNativeAvailable();
+
+  if (useNativeHolo) {
+    const holoCard = (
+      <View style={[styles.shell, style]}>
+        <PoppoHoloCardView
+          imageUri={imageUri}
+          rarity={toHoloCardRarity(rarity)}
+          cardName={name}
+          rarityLabel={label}
+          serial={serial}
+          starCount={powerStars}
+          move1Name={move1.name}
+          move1Damage={String(dmg1)}
+          move2Name={move2.name}
+          move2Damage={String(dmg2)}
+          moveDescription={move1.desc}
+          flavor={flavor}
+          showMove2={layout.showMove2}
+          showMoveDesc={layout.showMoveDesc}
+          layout="single"
+        />
+      </View>
+    );
+
+    if (onPress) {
+      return (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${label} ${name}`}
+          onPress={onPress}
+          style={({ pressed }) => [pressed && styles.pressed]}
+        >
+          {holoCard}
+        </Pressable>
+      );
+    }
+
+    return holoCard;
+  }
 
   const content = (
     <View style={[styles.shell, style]}>
@@ -282,20 +327,31 @@ export function PigeonCard({
           />
 
           <View style={styles.frameInset}>
-            <View style={[styles.face, { gap: layout.gap }]}>
+            <View style={[styles.face, styles.whiteBezel, { gap: layout.gap }]}>
               <CardPaper finish={finish} />
 
-              <Text style={[styles.watermark, { color: finish.muted }]}>{t.card.brandLine}</Text>
+              <View style={styles.topRow}>
+                <View style={[styles.rarityGem, { borderColor: finish.accent, backgroundColor: finish.accentSoftBg }]}>
+                  <Text style={[styles.rarityGemText, { color: finish.accent }]}>{label}</Text>
+                </View>
+                <Text style={[styles.serial, { color: finish.muted, fontSize: layout.sub - 1 }]}>{serial}</Text>
+                <Stars
+                  count={powerStars}
+                  size={layout.sub}
+                  bright={finish.accentBright}
+                  dim={finish.dark ? 'rgba(245,241,234,0.2)' : 'rgba(0,0,0,0.15)'}
+                />
+              </View>
 
-              <View style={styles.artSection}>
+              <View style={[styles.artSection, { flex: layout.artFlex }]}>
                 <View
                   style={[
                     styles.artRecess,
                     {
-                      borderTopColor: finish.dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.22)',
-                      borderLeftColor: finish.dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.18)',
-                      borderBottomColor: finish.dark ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.55)',
-                      borderRightColor: finish.dark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.45)',
+                      borderTopColor: finish.dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.25)',
+                      borderLeftColor: finish.dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.2)',
+                      borderBottomColor: finish.dark ? 'rgba(0,0,0,0.65)' : 'rgba(255,255,255,0.6)',
+                      borderRightColor: finish.dark ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.5)',
                     },
                   ]}
                 >
@@ -304,8 +360,8 @@ export function PigeonCard({
                     {hasHolo ? <HoloBands bands={finish.holoBands} /> : null}
                     {hasHolo ? <HoloLines accent={finish.accentBright} id={holoId} /> : null}
                     <LinearGradient
-                      colors={['rgba(255,255,255,0.18)', 'transparent', 'rgba(0,0,0,0.12)']}
-                      locations={[0, 0.35, 1]}
+                      colors={['rgba(255,255,255,0.2)', 'transparent', 'rgba(0,0,0,0.15)']}
+                      locations={[0, 0.4, 1]}
                       style={StyleSheet.absoluteFillObject}
                       pointerEvents="none"
                     />
@@ -318,57 +374,53 @@ export function PigeonCard({
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
                 style={[
-                  styles.namePlate,
+                  styles.nameBar,
                   {
-                    borderTopColor: finish.dark ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.75)',
-                    borderBottomColor: finish.dark ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.15)',
+                    borderColor: finish.accent,
+                    borderTopColor: finish.dark ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.8)',
+                    borderBottomColor: finish.dark ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.2)',
                   },
                 ]}
               >
-                <View style={[styles.rarityGem, { borderColor: finish.accent, backgroundColor: finish.accentSoftBg }]}>
-                  <Text style={[styles.rarityGemText, { color: finish.accent }]}>{label}</Text>
-                </View>
                 <Text style={[styles.cardName, { color: finish.ink, fontSize: layout.name }]} numberOfLines={1}>
                   {name}
                 </Text>
-                <View style={styles.namePlateMeta}>
-                  <Text style={[styles.serial, { color: finish.muted, fontSize: layout.sub - 1 }]}>{serial}</Text>
-                  <Stars
-                    count={powerStars}
-                    size={layout.sub}
-                    bright={finish.accentBright}
-                    dim={finish.dark ? 'rgba(245,241,234,0.2)' : 'rgba(0,0,0,0.15)'}
-                  />
-                </View>
               </LinearGradient>
 
               <View
                 style={[
                   styles.textBox,
                   {
-                    borderTopColor: finish.dark ? 'rgba(0,0,0,0.45)' : 'rgba(0,0,0,0.12)',
-                    borderLeftColor: finish.dark ? 'rgba(0,0,0,0.4)' : 'rgba(0,0,0,0.1)',
-                    borderBottomColor: finish.dark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.65)',
-                    borderRightColor: finish.dark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.55)',
-                    backgroundColor: finish.dark ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.45)',
+                    borderTopColor: finish.dark ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.14)',
+                    borderLeftColor: finish.dark ? 'rgba(0,0,0,0.45)' : 'rgba(0,0,0,0.1)',
+                    borderBottomColor: finish.dark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.7)',
+                    borderRightColor: finish.dark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.58)',
+                    backgroundColor: finish.dark ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.55)',
                   },
                 ]}
               >
-                <Text style={[styles.moveLine, { color: finish.ink, fontSize: layout.sub }]} numberOfLines={1}>
-                  <Text style={{ color: finish.accent, fontWeight: '800' }}>{move1.name}</Text>
-                  <Text style={{ color: finish.muted }}> · {dmg1}</Text>
-                </Text>
-                {layout.showMove2 ? (
-                  <Text style={[styles.moveLine, { color: finish.ink, fontSize: layout.sub }]} numberOfLines={1}>
-                    <Text style={{ color: finish.accent, fontWeight: '800' }}>{move2.name}</Text>
-                    <Text style={{ color: finish.muted }}> · {getCardAttackDamage(rarity, scanNo, 2)}</Text>
+                <View style={styles.attackRow}>
+                  <Text style={[styles.moveLine, { color: finish.ink, fontSize: layout.sub, flex: 1 }]} numberOfLines={1}>
+                    <Text style={{ color: finish.accent, fontWeight: '900' }}>{move1.name}</Text>
                   </Text>
+                  <Text style={[styles.damage, { color: finish.ink, fontSize: layout.sub }]}>{dmg1}</Text>
+                </View>
+                {layout.showMove2 ? (
+                  <View style={styles.attackRow}>
+                    <Text style={[styles.moveLine, { color: finish.ink, fontSize: layout.sub, flex: 1 }]} numberOfLines={1}>
+                      <Text style={{ color: finish.accent, fontWeight: '900' }}>{move2.name}</Text>
+                    </Text>
+                    <Text style={[styles.damage, { color: finish.ink, fontSize: layout.sub }]}>
+                      {dmg2}
+                    </Text>
+                  </View>
                 ) : null}
                 {layout.showMoveDesc ? (
-                  <Text style={[styles.moveDesc, { color: finish.muted, fontSize: layout.sub - 1 }]} numberOfLines={1}>
+                  <Text style={[styles.moveDesc, { color: finish.muted, fontSize: layout.sub - 1 }]} numberOfLines={2}>
                     {move1.desc}
                   </Text>
                 ) : null}
+                <View style={[styles.ruleLine, { backgroundColor: finish.accentSoftBg }]} />
                 <Text
                   style={[styles.flavor, { color: finish.muted, fontSize: layout.sub - 1 }]}
                   numberOfLines={layout.flavorLines}
@@ -463,11 +515,22 @@ const styles = StyleSheet.create({
   },
   face: {
     flex: 1,
-    padding: 5,
+    padding: 4,
     overflow: 'hidden',
   },
+  whiteBezel: {
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+    borderRadius: 8,
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 4,
+    zIndex: 2,
+  },
   artSection: {
-    flex: 1,
     minHeight: 0,
   },
   artRecess: {
@@ -487,38 +550,36 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  namePlate: {
-    borderRadius: 5,
-    borderWidth: 1,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    gap: 2,
+  nameBar: {
+    borderRadius: 4,
+    borderWidth: 1.5,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    alignItems: 'center',
+    zIndex: 2,
   },
   rarityGem: {
-    alignSelf: 'flex-start',
     borderWidth: 1,
     borderRadius: 3,
-    paddingHorizontal: 4,
+    paddingHorizontal: 5,
     paddingVertical: 1,
   },
   rarityGemText: {
-    fontSize: 7,
+    fontSize: 8,
     fontWeight: '900',
-    letterSpacing: 1.6,
+    letterSpacing: 1.4,
   },
   cardName: {
     fontWeight: '900',
-    letterSpacing: -0.2,
-  },
-  namePlateMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    letterSpacing: -0.3,
+    textAlign: 'center',
   },
   serial: {
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
     letterSpacing: 0.4,
+    flex: 1,
+    textAlign: 'center',
   },
   starsRow: {
     flexDirection: 'row',
@@ -526,33 +587,41 @@ const styles = StyleSheet.create({
   },
   textBox: {
     borderRadius: 5,
-    borderWidth: 1,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    gap: 2,
+    borderWidth: 1.5,
+    paddingHorizontal: 7,
+    paddingVertical: 5,
+    gap: 3,
+    flex: 1,
+    minHeight: 0,
+    zIndex: 2,
+  },
+  attackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   moveLine: {
-    fontWeight: '600',
-    lineHeight: 13,
+    fontWeight: '700',
+    lineHeight: 14,
+  },
+  damage: {
+    fontWeight: '900',
+    fontVariant: ['tabular-nums'],
+    minWidth: 22,
+    textAlign: 'right',
+  },
+  ruleLine: {
+    height: 1,
+    marginVertical: 1,
   },
   moveDesc: {
     lineHeight: 11,
     fontStyle: 'italic',
   },
   flavor: {
-    lineHeight: 11,
+    lineHeight: 12,
     fontStyle: 'italic',
     fontWeight: '500',
-  },
-  watermark: {
-    position: 'absolute',
-    top: 7,
-    right: 8,
-    fontSize: 6,
-    fontWeight: '800',
-    letterSpacing: 2.5,
-    opacity: 0.4,
-    zIndex: 2,
   },
   foilWash: {
     ...StyleSheet.absoluteFillObject,
@@ -560,7 +629,7 @@ const styles = StyleSheet.create({
   },
   laminate: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 10,
+    borderRadius: 8,
   },
   cardEdge: {
     position: 'absolute',
