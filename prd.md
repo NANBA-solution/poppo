@@ -25,7 +25,7 @@
 - **即時判定**: ネット不要。端末内 ML Kit でハトかどうかをその場で判定
 - **ローカル完結**: 写真・データは端末内のみ。ログイン・クラウド同期不要
 - **第 N 羽**: 品種ではなく通し番号でコレクションを愛でる
-- **レアカード体験**: 保存時にレアリティ抽選。トレカ風 UI で質感あるカード表示
+- **レアカード体験**: 保存時にレアリティ抽選。トレカ風 UI で質感あるカード表示（iOS では 3D ホロ）
 - **シュールな遊び心**: クエスト・称号・通知文言が理不尽で面白い
 
 ### 1.4 ターゲットユーザー
@@ -51,7 +51,8 @@
 | ハト判定 | ML Kit 画像ラベリング（端末内） |
 | コレクション | ローカル保存、一覧、詳細、削除 |
 | レアリティ | 保存時抽選（N / R / SR / UR / SECRET）、条件保証・天井 |
-| カード UI | `PigeonCard` トレカ風表示（コレクション・詳細・結果・シェア） |
+| カード UI | `PigeonCard` トレカ風表示（コレクション・詳細・結果・シェア）。iOS では SceneKit 3D ホロ |
+| 3D ホロカード | `poppo-cards` ネイティブモジュール（SceneKit + Metal + CoreMotion、iOS のみ） |
 | プロフィール | 統計、称号、スキャン一覧 |
 | クエスト | 64 種類の達成条件（報酬なし） |
 | シェア | 画像キャプチャ + 共有シート / Instagram / X |
@@ -225,6 +226,34 @@
 | ENT-02 | 画像シェア / Instagram / X（カードキャプチャ） |
 | ENT-03 | コレクションから削除（確認ダイアログ） |
 
+### 4.7.1 ぽっぽカード（`PigeonCard`）
+
+トレカ風の 1 羽分 UI。コレクション・詳細・結果・シェアで共通利用。
+
+| 要件 ID | 説明 |
+|---------|------|
+| CRD-01 | サイズ: `grid` / `detail` / `share` の 3 バリエーション |
+| CRD-02 | 表示要素: レアラベル・通し番号（No.XXX）・★（1〜5）・写真・名前・わざ（最大 2）・ダメージ・わざ説明（detail/share）・フレーバー |
+| CRD-03 | わざ名・説明は `cardMoveGenerator` で `entryId` + `scanNo` + `flavorIndex` からシード固定生成 |
+| CRD-04 | ダメージは `getCardAttackDamage` でレア・番号・技番号から算出 |
+| CRD-05 | レア別フレーム色・ホロ帯（R 以上）・紙質グラデーション |
+| CRD-06 | **iOS + `PoppoCards` 同梱時**: `PoppoHoloCardView` で 3D ホロ表示に差し替え |
+| CRD-07 | **Android / ネイティブ未同梱時**: React Native の `PigeonCard` を表示（フォールバック） |
+| CRD-08 | 3D 表示でも RN と同じコンテンツ（名前・わざ・フレーバー等）をネイティブへ props 渡し |
+
+**3D ホロカード（`modules/poppo-cards`、iOS のみ）**
+
+| 要件 ID | 説明 |
+|---------|------|
+| HOL-01 | SceneKit `SCNPlane` + Metal シェーダー（`CardHolo.metal`）で回折・フレネル・GGX 風ホロ |
+| HOL-02 | `CoreMotion` で端末傾きに応じたカードチルト・色相シフト |
+| HOL-03 | タップでリフト、ドラッグで回転、離すとスプリング復帰 |
+| HOL-04 | カード面テクスチャは `CardFaceRenderer` が UIKit で描画（写真・レア・わざ・フレーバー込み） |
+| HOL-05 | レアリティマッピング: N→`common` / R→`rare` / SR・UR・SECRET→`legendary`（`toHoloCardRarity`） |
+| HOL-06 | レア別ホロ強度・ティント・フレネル・UR/SECRET 用グロー |
+| HOL-07 | 親 View の bounds いっぱいに SCNView を表示（固定 200×280 は廃止） |
+| HOL-08 | 画像 URI は `file://`・絶対パス・HTTP(S) に対応（`CardImageLoader`） |
+
 ### 4.8 クエスト（`/quests`）
 
 | 要件 ID | 説明 |
@@ -327,7 +356,8 @@
 |----------------|------|
 | `Screen` / `ScreenHeader` | 画面骨格 |
 | `GlassCard` | 汎用サーフェス UI |
-| `PigeonCard` | トレカ風コレクションカード（grid / detail / share） |
+| `PigeonCard` | トレカ風コレクションカード（grid / detail / share）。iOS では 3D ホロに差し替え |
+| `PoppoHoloCardView` | SceneKit 3D ホロカード（`poppo-cards`、iOS のみ） |
 | `FloatingPill` | カメラ下部ナビ |
 | `ActionFooter` / `FooterButton` | 結果・詳細のフッター |
 | `ScanDetectOverlay` | 判定中 HUD 演出 |
@@ -360,22 +390,31 @@
 | 通知 | expo-notifications |
 | 音 | expo-av（動的 import） |
 | シェア | expo-sharing, react-native-view-shot, expo-media-library |
+| 3D カード（iOS） | `poppo-cards`（SceneKit, Metal, CoreMotion, SwiftUI） |
 
-### 6.2 バンドル ID
+### 6.2 ローカル Expo モジュール
+
+| モジュール | パス | 用途 |
+|------------|------|------|
+| `poppo-icons` | `modules/poppo-icons` | iOS SwiftUI アイコン |
+| `poppo-cards` | `modules/poppo-cards` | iOS 3D ホロカード（`PoppoHoloCardView`） |
+
+### 6.3 バンドル ID
 
 - iOS: `app.poppo.mobile`
 - Android: `app.poppo.mobile`
 - URL Scheme: `poppo://`
 
-### 6.3 ネイティブ再ビルドが必要な変更
+### 6.4 ネイティブ再ビルドが必要な変更
 
 以下を変更・追加した場合は dev client の再ビルドが必須。
 
 - expo-camera / expo-notifications / ML Kit / expo-av
 - `app.config.js` の plugins 変更
-- ネイティブモジュール（`poppo-icons` 等）
+- ネイティブモジュール（`poppo-icons`, `poppo-cards` 等）
+- `poppo-cards` の Swift / Metal 変更時は `pod install` + iOS 再ビルド
 
-### 6.4 パーミッション
+### 6.5 パーミッション
 
 | 権限 | 用途 |
 |------|------|
@@ -408,6 +447,8 @@
 | コレクション 0 件 | 各画面で empty state + CTA |
 | `/auth` アクセス | `/camera` へリダイレクト |
 | `/dex` アクセス | `/collection` へリダイレクト |
+| iOS 3D ホロ未同梱ビルド | `PigeonCard` の RN フォールバック表示 |
+| Android | 3D ホロ非対応。常に RN `PigeonCard` |
 
 ---
 
@@ -428,6 +469,8 @@
 ## 10. 既知の制約・仕様として許容する挙動
 
 - iOS ではシステムシャッター音と鳩 MP3 が二重に鳴る場合がある
+- 3D ホロカードは **iOS のみ**。Android は RN カード表示
+- シェアキャプチャは `react-native-view-shot` 経由のため、3D ホロ表示中も 2D キャプチャになる場合がある
 - 品種フィールドはデータ上残るが UI には出さない
 - `phantom_breed` / `schrodinger_poppo` は達成不能（仕様）
 - 称号 tier（最大 999 羽）とコレクション目標（100 羽）は別体系
@@ -444,7 +487,7 @@
 - iCloud / 手動バックアップ
 - Android 実機 QA 強化
 - 背景削除・鳩切り抜き（カード用）
-- カード画像の事前レンダリング保存
+- Android 向け 3D ホロカード
 
 ---
 
@@ -460,6 +503,8 @@
 | 理不尽クエスト | 達成しても報酬がないクエスト群 |
 | レアリティ | N / R / SR / UR / SECRET の 5 段階。保存時に確定 |
 | ぽっぽカード | `PigeonCard` で表示する 1 羽分のトレカ風 UI |
+| 3D ホロカード | iOS ネイティブ `PoppoHoloCardView`。SceneKit + Metal で傾き連動のホロ演出 |
+| `poppo-cards` | 3D ホロカード用ローカル Expo モジュール（`modules/poppo-cards`） |
 
 ---
 
@@ -476,4 +521,5 @@
 
 | 日付 | 版 | 内容 |
 |------|-----|------|
+| 2026-06-22 | 1.0.1 | 3D ホロカード（`poppo-cards`）・`PigeonCard` iOS 差し替え・トレカ UI 詳細を追記 |
 | 2026-06-06 | 1.0 | 現行実装（ローカル専用・スキャン中心）に基づき初版作成 |
