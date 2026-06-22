@@ -5,6 +5,7 @@ import UIKit
 final class PoppoHoloCardView: ExpoView {
   private let hosting: UIHostingController<ContentView>
   private var pendingRefresh = false
+  private var refreshQueued = false
 
   var layoutName = "single"
   var rarityName = "common"
@@ -18,17 +19,37 @@ final class PoppoHoloCardView: ExpoView {
   var rightImageUri: String?
 
   var cardName = ""
+  var typeLong = ""
+  var profile = ""
   var rarityLabel = "N"
   var serial = "No.000"
   var starCount = 1
+  var hp = "0"
+  var retreatCost = "1"
+  var hpLabel = "HP"
+  var retreatLabel = ""
   var move1Name = ""
   var move1Damage = "0"
+  var move1Cost = ""
   var move2Name = ""
   var move2Damage = ""
+  var move2Cost = ""
   var moveDescription = ""
+  var move2Description = ""
+  var moveTraitLabel = "特徴"
+  var imageScale: Float = 1
+  var imageOffsetX: Float = 0
+  var imageOffsetY: Float = 0
   var flavor = ""
+  var brandLine = ""
   var showMove2 = false
   var showMoveDesc = false
+  var showMove2Desc = false
+  var showMeta = true
+  var showProfile = true
+  var showStats = true
+  var showCosts = true
+  var showBrand = true
 
   required init(appContext: AppContext? = nil) {
     hosting = UIHostingController(
@@ -49,7 +70,10 @@ final class PoppoHoloCardView: ExpoView {
   }
 
   func refreshContent() {
-    guard !pendingRefresh else { return }
+    if pendingRefresh {
+      refreshQueued = true
+      return
+    }
     pendingRefresh = true
 
     let layout = layoutKind
@@ -97,6 +121,11 @@ final class PoppoHoloCardView: ExpoView {
       }
 
       self.hosting.rootView = ContentView(faces: faces, layout: layout)
+
+      if self.refreshQueued {
+        self.refreshQueued = false
+        self.refreshContent()
+      }
     }
   }
 
@@ -110,17 +139,37 @@ final class PoppoHoloCardView: ExpoView {
         photo: photo,
         rarity: rarity,
         rarityLabel: rarity == .legendary ? "SR" : (rarity == .rare ? "R" : "N"),
+        typeLong: "路上ハト",
+        profile: "高さ 気分次第",
         name: "POPPO",
         serial: "No.000",
         starCount: rarity == .legendary ? 5 : (rarity == .rare ? 3 : 1),
-        move1Name: "はとパンチ",
+        hp: "70",
+        retreatCost: "1",
+        hpLabel: "HP",
+        retreatLabel: "にげる",
+        move1Name: "ぽっぽスマイル",
         move1Damage: "30",
-        move2Name: "つばさビーム",
+        move1Cost: "",
+        move2Name: "もふもふウィング",
         move2Damage: "50",
-        moveDescription: "",
-        flavor: "街角のハト。",
+        move2Cost: "",
+        moveDescription: "ぽっぽっと鳴いただけなのに、胸がきゅんとする。",
+        move2Description: "羽を広げると、公園の空気がふわっとやわらかくなる。",
+        moveTraitLabel: "特徴",
+        imageScale: 1,
+        imageOffsetX: 0,
+        imageOffsetY: 0,
+        flavor: "公園の風にのって、ふわっとやさしい一羽。",
+        brandLine: "POPPO",
         showMove2: rarity != .common,
-        showMoveDesc: false
+        showMoveDesc: rarity != .common,
+        showMove2Desc: rarity == .legendary,
+        showMeta: true,
+        showProfile: rarity != .common,
+        showStats: true,
+        showCosts: false,
+        showBrand: true
       )
     }
 
@@ -128,17 +177,37 @@ final class PoppoHoloCardView: ExpoView {
       photo: photo,
       rarity: rarity,
       rarityLabel: rarityLabel.isEmpty ? "N" : rarityLabel,
+      typeLong: typeLong.isEmpty ? "POPPO" : typeLong,
+      profile: profile,
       name: cardName.isEmpty ? "POPPO" : cardName,
       serial: serial.isEmpty ? "No.000" : serial,
       starCount: max(1, min(5, starCount)),
+      hp: hp.isEmpty ? "0" : hp,
+      retreatCost: retreatCost.isEmpty ? "1" : retreatCost,
+      hpLabel: hpLabel.isEmpty ? "HP" : hpLabel,
+      retreatLabel: retreatLabel,
       move1Name: move1Name.isEmpty ? "—" : move1Name,
       move1Damage: move1Damage.isEmpty ? "0" : move1Damage,
+      move1Cost: move1Cost,
       move2Name: move2Name,
       move2Damage: move2Damage,
+      move2Cost: move2Cost,
       moveDescription: moveDescription,
+      move2Description: move2Description,
+      moveTraitLabel: moveTraitLabel.isEmpty ? "特徴" : moveTraitLabel,
+      imageScale: imageScale,
+      imageOffsetX: imageOffsetX,
+      imageOffsetY: imageOffsetY,
       flavor: flavor,
+      brandLine: brandLine.isEmpty ? "POPPO" : brandLine,
       showMove2: showMove2,
-      showMoveDesc: showMoveDesc
+      showMoveDesc: showMoveDesc,
+      showMove2Desc: showMove2Desc,
+      showMeta: showMeta,
+      showProfile: showProfile,
+      showStats: showStats,
+      showCosts: showCosts,
+      showBrand: showBrand
     )
   }
 }

@@ -52,11 +52,35 @@ export function getCardPowerStars(rarity: CardRarity, scanNo: number): number {
 }
 
 export function getCardAttackDamage(
-  rarity: CardRarity,
+  _rarity: CardRarity,
   scanNo: number,
   slot: 1 | 2,
 ): number {
-  const stats = getCardStats(rarity, scanNo);
-  if (slot === 1) return 10 + (stats.atk % 50);
-  return 30 + (stats.def % 80);
+  const stats = getCardStats(_rarity, scanNo);
+  const seed = slot === 1 ? stats.atk : stats.def;
+  return 1 + (seed % 10);
+}
+
+const HP_BASE: Record<CardRarity, number> = {
+  N: 50,
+  R: 70,
+  SR: 90,
+  UR: 110,
+  SECRET: 130,
+};
+
+export function getCardHp(rarity: CardRarity, scanNo: number): number {
+  return HP_BASE[rarity] + (scanNo % 25);
+}
+
+const RETREAT_BASE: Record<CardRarity, number> = {
+  N: 1,
+  R: 1,
+  SR: 2,
+  UR: 2,
+  SECRET: 3,
+};
+
+export function getCardRetreatCost(rarity: CardRarity, scanNo: number): number {
+  return RETREAT_BASE[rarity] + (scanNo % 3 === 0 ? 1 : 0);
 }

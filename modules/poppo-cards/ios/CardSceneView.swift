@@ -63,17 +63,37 @@ final class CardSceneController: NSObject, SCNSceneRendererDelegate, UIGestureRe
           photo: nil,
           rarity: .common,
           rarityLabel: "N",
+          typeLong: "POPPO",
+          profile: "",
           name: "POPPO",
           serial: "No.000",
           starCount: 1,
+          hp: "50",
+          retreatCost: "1",
+          hpLabel: "HP",
+          retreatLabel: "",
           move1Name: "—",
           move1Damage: "0",
+          move1Cost: "",
           move2Name: "",
           move2Damage: "",
+          move2Cost: "",
           moveDescription: "",
+          move2Description: "",
+          moveTraitLabel: "特徴",
+          imageScale: 1,
+          imageOffsetX: 0,
+          imageOffsetY: 0,
           flavor: "",
+          brandLine: "POPPO",
           showMove2: false,
-          showMoveDesc: false
+          showMoveDesc: false,
+          showMove2Desc: false,
+          showMeta: true,
+          showProfile: false,
+          showStats: true,
+          showCosts: true,
+          showBrand: true
         )
       let card = CardNode(
         face: face,
@@ -163,21 +183,26 @@ final class CardSceneController: NSObject, SCNSceneRendererDelegate, UIGestureRe
   }
 
   @objc private func handlePan(_ gesture: UIPanGestureRecognizer) {
-    let point = gesture.location(in: scnView)
-
     switch gesture.state {
     case .began:
+      let point = gesture.location(in: scnView)
       panStartPoint = point
-      selectedCard = card(at: point)
-      selectedCard?.liftAnimated()
+      guard let card = card(at: point) else { return }
+      selectedCard = card
+      cards.forEach { $0.setMotionEnabled($0 !== card) }
+      card.beginDrag()
+      card.liftAnimated()
     case .changed:
       guard let card = selectedCard else { return }
-      let dx = Float(point.x - panStartPoint.x)
-      let dy = Float(point.y - panStartPoint.y)
-      card.applyDragRotation(deltaX: dx * 0.004, deltaY: dy * -0.004)
+      let translation = gesture.translation(in: scnView)
+      card.applyDragRotation(
+        deltaX: Float(translation.x),
+        deltaY: Float(translation.y)
+      )
     case .ended, .cancelled:
-      selectedCard?.settleAnimated()
-      selectedCard?.resetDragRotation()
+      guard let card = selectedCard else { return }
+      card.endDrag()
+      cards.forEach { $0.setMotionEnabled(true) }
       selectedCard = nil
     default:
       break
@@ -197,7 +222,7 @@ final class CardSceneController: NSObject, SCNSceneRendererDelegate, UIGestureRe
         node = current.parent
       }
     }
-    return cards.first
+    return nil
   }
 
   func renderer(_ renderer: SCNSceneRenderer, updateAtTime time: TimeInterval) {
@@ -257,11 +282,17 @@ enum CardImageLoader {
       }
     }
 
-    if let url = URL(string: uri), url.scheme?.lowercased() == "file" {
-      return UIImage(contentsOfFile: url.path)
+    let candidates = normalizedFilePaths(from: uri)
+    for path in candidates {
+      if FileManager.default.fileExists(atPath: path),
+         let image = UIImage(contentsOfFile: path) {
+        return image
+      }
     }
 
-    if let url = URL(string: uri), let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" {
+    if let url = URL(string: uri),
+       let scheme = url.scheme?.lowercased(),
+       scheme == "http" || scheme == "https" {
       var result: UIImage?
       let semaphore = DispatchSemaphore(value: 0)
       URLSession.shared.dataTask(with: url) { data, _, _ in
@@ -272,13 +303,34 @@ enum CardImageLoader {
       return result
     }
 
-    let trimmed = uri.replacingOccurrences(of: "file://", with: "")
-    if let decoded = trimmed.removingPercentEncoding, FileManager.default.fileExists(atPath: decoded) {
-      return UIImage(contentsOfFile: decoded)
-    }
-    if FileManager.default.fileExists(atPath: trimmed) {
-      return UIImage(contentsOfFile: trimmed)
-    }
     return nil
+  }
+
+  private static func normalizedFilePaths(from uri: String) -> [String] {
+    var paths: [String] = []
+    func append(_ raw: String) {
+      let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !trimmed.isEmpty else { return }
+      if let decoded = trimmed.removingPercentEncoding, !paths.contains(decoded) {
+        paths.append(decoded)
+      }
+      if !paths.contains(trimmed) {
+        paths.append(trimmed)
+      }
+    }
+
+    append(uri)
+    append(uri.replacingOccurrences(of: "file://", with: ""))
+
+    if let url = URL(string: uri), url.isFileURL {
+      append(url.path)
+    } else if uri.hasPrefix("/") {
+      append(uri)
+      append("file://\(uri)")
+    } else if !uri.contains("://") {
+      append("file://\(uri)")
+    }
+
+    return paths
   }
 }

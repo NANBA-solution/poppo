@@ -2,6 +2,15 @@ export const CARD_RARITIES = ['N', 'R', 'SR', 'UR', 'SECRET'] as const;
 
 export type CardRarity = (typeof CARD_RARITIES)[number];
 
+export type CardImageFraming = {
+  /** 1 = 標準のトリミング、最大 3 まで拡大 */
+  scale: number;
+  /** 横方向のずらし（-1〜1） */
+  offsetX: number;
+  /** 縦方向のずらし（-1〜1） */
+  offsetY: number;
+};
+
 export type PigeonEntry = {
   id: string;
   imageUri: string;
@@ -11,4 +20,6 @@ export type PigeonEntry = {
   rarity?: CardRarity;
   /** t.card.flavors[rarity] のインデックス */
   flavorIndex?: number;
+  /** カード写真窓での拡大・位置 */
+  imageFraming?: CardImageFraming;
 };

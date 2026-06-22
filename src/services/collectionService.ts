@@ -3,9 +3,10 @@ import {
   deletePigeonScanLocal,
   readAllLocal,
   savePigeonScanLocal,
+  updatePigeonImageFramingLocal,
 } from '@/services/collectionService.local';
 import { resetCollectionGoal } from '@/services/collectionGoalService';
-import type { PigeonEntry } from '@/types/collection';
+import type { CardImageFraming, PigeonEntry } from '@/types/collection';
 import type { PigeonScanJson } from '@/types/scan';
 
 /** 新しい順ソート済みコレクションでのスキャン通し番号（第 N 羽） */
@@ -41,6 +42,13 @@ export async function getPigeonById(id: string): Promise<PigeonEntry | null> {
 
 export async function deletePigeonScan(id: string): Promise<boolean> {
   return deletePigeonScanLocal(id);
+}
+
+export async function updatePigeonImageFraming(
+  id: string,
+  framing: CardImageFraming,
+): Promise<PigeonEntry | null> {
+  return updatePigeonImageFramingLocal(id, framing);
 }
 
 export async function clearAllCollection(): Promise<number> {

@@ -16,8 +16,9 @@ const MILESTONE_SCAN_NOS = new Set([
   1, 7, 13, 42, 69, 77, 88, 100, 108, 404, 500, 666, 777, 888, 999,
 ]);
 
-const PITY_THRESHOLD = 25;
-const FLAVOR_COUNT = 5;
+const PITY_THRESHOLD = 45;
+/** ja/en の t.card.flavors[rarity] 件数（各レア 12 件）と揃える */
+const FLAVOR_COUNT = 12;
 
 function maxRarity(a: CardRarity, b: CardRarity): CardRarity {
   return RARITY_RANK[a] >= RARITY_RANK[b] ? a : b;
@@ -33,10 +34,10 @@ function seededUnit(seed: string): number {
 }
 
 function rollFromUnit(unit: number): CardRarity {
-  if (unit < 0.01) return 'SECRET';
-  if (unit < 0.04) return 'UR';
-  if (unit < 0.13) return 'SR';
-  if (unit < 0.35) return 'R';
+  if (unit < 0.002) return 'SECRET';
+  if (unit < 0.008) return 'UR';
+  if (unit < 0.028) return 'SR';
+  if (unit < 0.10) return 'R';
   return 'N';
 }
 
@@ -61,11 +62,11 @@ export function getRarityFloor(scanNo: number, scannedAt: Date): CardRarity {
   let floor: CardRarity = 'N';
 
   if (scanNo === 1) {
-    return 'UR';
+    return 'R';
   }
 
   if (MILESTONE_SCAN_NOS.has(scanNo)) {
-    floor = maxRarity(floor, 'SR');
+    floor = maxRarity(floor, 'R');
   }
 
   if (scanNo > 1 && scanNo % 50 === 0) {
@@ -74,17 +75,17 @@ export function getRarityFloor(scanNo: number, scannedAt: Date): CardRarity {
 
   const hour = scannedAt.getHours();
   if (hour === 0) {
-    floor = maxRarity(floor, 'SR');
+    floor = maxRarity(floor, 'R');
   } else if (hour >= 22 || hour < 5) {
     floor = maxRarity(floor, 'R');
   }
 
   if (isFriday13th(scannedAt)) {
-    floor = maxRarity(floor, 'SR');
+    floor = maxRarity(floor, 'R');
   }
 
   if (isLeapDay(scannedAt)) {
-    floor = maxRarity(floor, 'UR');
+    floor = maxRarity(floor, 'SR');
   }
 
   if (isExactTime(scannedAt, 4, 44) || isExactTime(scannedAt, 3, 33)) {
@@ -109,7 +110,7 @@ function applyPityFloor(
   existingEntries: PigeonEntry[],
 ): CardRarity {
   if (scansSinceLastHighRarity(existingEntries) >= PITY_THRESHOLD) {
-    return maxRarity(floor, 'SR');
+    return maxRarity(floor, 'R');
   }
   return floor;
 }

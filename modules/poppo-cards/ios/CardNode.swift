@@ -17,6 +17,12 @@ final class CardNode: SCNNode {
   private var baseScale = SCNVector3(1, 1, 1)
   private var isLifted = false
 
+  private var motionEnabled = true
+  private var isDragging = false
+  private var motionTilt = SCNVector3Zero
+  private var dragTilt = SCNVector3Zero
+  private var liftTilt = SCNVector3Zero
+
   var uniforms = CardHoloUniforms(
     lightDirection: SIMD3(0.2, 0.8, 1.0),
     viewAngle: .zero,
@@ -54,7 +60,9 @@ final class CardNode: SCNNode {
     edgePlane.cornerRadius = plane.cornerRadius + 0.02
     edgeNode = SCNNode(geometry: edgePlane)
     let edgeMaterial = SCNMaterial()
-    edgeMaterial.diffuse.contents = UIColor.white
+    edgeMaterial.diffuse.contents = CardFaceTheme.theme(for: face).bezel
+    edgeMaterial.emission.contents = CardFaceTheme.theme(for: face).glow
+    edgeMaterial.emission.intensity = face.rarity == .common ? 0 : (face.rarity == .rare ? 0.18 : 0.32)
     edgeMaterial.lightingModel = .constant
     edgeMaterial.isDoubleSided = false
     edgePlane.materials = [edgeMaterial]
@@ -62,17 +70,36 @@ final class CardNode: SCNNode {
 
     if rarity == .legendary {
       let glowPlane = SCNPlane(
+        width: CGFloat(CardDimensions.planeWidth) * 1.14,
+        height: CGFloat(CardDimensions.planeHeight) * 1.14
+      )
+      glowPlane.cornerRadius = plane.cornerRadius + 0.06
+      glowNode = SCNNode(geometry: glowPlane)
+      let glowMat = SCNMaterial()
+      let glowColor = CardFaceTheme.theme(for: face).glow
+      glowMat.diffuse.contents = glowColor.withAlphaComponent(0.42)
+      glowMat.emission.contents = glowColor
+      glowMat.emission.intensity = CGFloat(rarity.glowEmissive + 0.15)
+      glowMat.lightingModel = .constant
+      glowMat.transparency = 0.48
+      glowMat.isDoubleSided = true
+      glowMat.writesToDepthBuffer = false
+      glowPlane.materials = [glowMat]
+      glowNode?.position = SCNVector3(0, 0, -0.01)
+    } else if rarity == .rare {
+      let glowPlane = SCNPlane(
         width: CGFloat(CardDimensions.planeWidth) * 1.08,
         height: CGFloat(CardDimensions.planeHeight) * 1.08
       )
       glowPlane.cornerRadius = plane.cornerRadius + 0.04
       glowNode = SCNNode(geometry: glowPlane)
       let glowMat = SCNMaterial()
-      glowMat.diffuse.contents = UIColor(red: 0.55, green: 0.35, blue: 0.95, alpha: 0.35)
-      glowMat.emission.contents = UIColor(red: 0.7, green: 0.45, blue: 1.0, alpha: 1.0)
+      let glowColor = CardFaceTheme.theme(for: face).glow
+      glowMat.diffuse.contents = glowColor.withAlphaComponent(0.28)
+      glowMat.emission.contents = glowColor
       glowMat.emission.intensity = CGFloat(rarity.glowEmissive)
       glowMat.lightingModel = .constant
-      glowMat.transparency = 0.55
+      glowMat.transparency = 0.58
       glowMat.isDoubleSided = true
       glowMat.writesToDepthBuffer = false
       glowPlane.materials = [glowMat]
@@ -106,11 +133,11 @@ final class CardNode: SCNNode {
     baseEuler = SCNVector3(0, tiltRad, 0)
     basePosition = SCNVector3(0, offsetY * 0.01, zOffset)
     position = basePosition
-    eulerAngles = baseEuler
+    syncEuler(animated: false)
 
     applyMaterial(face: face)
-    applyRaritySettings()
-    startLegendaryPulseIfNeeded()
+    applyRaritySettings(face: face)
+    startGlowPulseIfNeeded()
   }
 
   @available(*, unavailable)
@@ -120,63 +147,93 @@ final class CardNode: SCNNode {
 
   func setFace(_ face: CardFaceData) {
     applyMaterial(face: face)
-    applyRaritySettings()
+    applyRaritySettings(face: face)
+    if let edgeMaterial = edgeNode.geometry?.materials.first {
+      edgeMaterial.diffuse.contents = CardFaceTheme.theme(for: face).bezel
+    }
+  }
+
+  func setMotionEnabled(_ enabled: Bool) {
+    motionEnabled = enabled
   }
 
   func updateMotion(roll: Float, pitch: Float) {
-    uniforms.viewAngle = SIMD2(roll, pitch)
-    uniforms.hueShift = roll * 0.35 + pitch * 0.28
+    guard motionEnabled, !isDragging else { return }
 
-    let motionTiltX = pitch * 0.22
-    let motionTiltY = roll * 0.22
-    eulerAngles = SCNVector3(
-      baseEuler.x + motionTiltX,
-      baseEuler.y + motionTiltY,
-      baseEuler.z
+    uniforms.viewAngle = SIMD2(roll, pitch)
+    uniforms.hueShift = roll * 0.48 + pitch * 0.38
+    motionTilt = SCNVector3(pitch * 0.16, roll * 0.16, 0)
+    syncEuler(animated: false)
+  }
+
+  func beginDrag() {
+    isDragging = true
+    removeAction(forKey: "lift")
+    removeAction(forKey: "dragRelease")
+  }
+
+  func applyDragRotation(deltaX: Float, deltaY: Float) {
+    let maxTilt: Float = 0.38
+    dragTilt = SCNVector3(
+      clamp(-deltaY * 0.002, min: -maxTilt, max: maxTilt),
+      clamp(deltaX * 0.0025, min: -maxTilt, max: maxTilt),
+      0
     )
+    syncEuler(animated: false)
+  }
+
+  func endDrag() {
+    isDragging = false
+    dragTilt = SCNVector3Zero
+    syncEuler(animated: true, duration: 0.38)
+    if isLifted {
+      settleAnimated()
+    }
   }
 
   func liftAnimated() {
     guard !isLifted else { return }
     isLifted = true
 
-    let lift = SCNAction.group([
-      SCNAction.move(to: SCNVector3(basePosition.x, basePosition.y + 0.16, basePosition.z + 0.12), duration: 0.28),
-      SCNAction.scale(to: 1.05, duration: 0.28),
-      SCNAction.rotateTo(x: CGFloat(-8 * Float.pi / 180), y: CGFloat(baseEuler.y - 0.14), z: 0, duration: 0.28),
-    ])
-    lift.timingMode = SCNActionTimingMode.easeOut
-    runAction(lift, forKey: "lift")
+    SCNTransaction.begin()
+    SCNTransaction.animationDuration = 0.26
+    SCNTransaction.animationTimingFunction = CAMediaTimingFunction(name: .easeOut)
+    position = SCNVector3(basePosition.x, basePosition.y + 0.14, basePosition.z + 0.1)
+    scale = SCNVector3(1.04, 1.04, 1.04)
+    liftTilt = SCNVector3(-0.12, -0.1, 0)
+    syncEuler(animated: false)
+    SCNTransaction.commit()
   }
 
   func settleAnimated() {
     isLifted = false
-    let settle = SCNAction.group([
-      SCNAction.move(to: basePosition, duration: 0.42),
-      SCNAction.scale(to: CGFloat(baseScale.x), duration: 0.42),
-      SCNAction.rotateTo(x: CGFloat(baseEuler.x), y: CGFloat(baseEuler.y), z: CGFloat(baseEuler.z), duration: 0.42),
-    ])
-    settle.timingMode = SCNActionTimingMode.easeInEaseOut
-    runAction(settle, forKey: "lift")
+
+    SCNTransaction.begin()
+    SCNTransaction.animationDuration = 0.36
+    SCNTransaction.animationTimingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+    position = basePosition
+    scale = baseScale
+    liftTilt = SCNVector3Zero
+    syncEuler(animated: false)
+    SCNTransaction.commit()
   }
 
-  func applyDragRotation(deltaX: Float, deltaY: Float) {
-    eulerAngles = SCNVector3(
-      baseEuler.x + deltaY * 0.45,
-      baseEuler.y + deltaX * 0.55,
-      baseEuler.z
+  private func syncEuler(animated: Bool, duration: TimeInterval = 0.36) {
+    let target = SCNVector3(
+      baseEuler.x + liftTilt.x + motionTilt.x + dragTilt.x,
+      baseEuler.y + liftTilt.y + motionTilt.y + dragTilt.y,
+      baseEuler.z + liftTilt.z + motionTilt.z + dragTilt.z
     )
-  }
 
-  func resetDragRotation() {
-    let spring = SCNAction.rotateTo(
-      x: CGFloat(eulerAngles.x),
-      y: CGFloat(baseEuler.y),
-      z: CGFloat(baseEuler.z),
-      duration: 0.35
-    )
-    spring.timingMode = SCNActionTimingMode.easeInEaseOut
-    runAction(spring)
+    if animated {
+      SCNTransaction.begin()
+      SCNTransaction.animationDuration = duration
+      SCNTransaction.animationTimingFunction = CAMediaTimingFunction(name: .easeOut)
+      eulerAngles = target
+      SCNTransaction.commit()
+    } else {
+      eulerAngles = target
+    }
   }
 
   private func applyMaterial(face: CardFaceData) {
@@ -212,20 +269,26 @@ final class CardNode: SCNNode {
     holoMaterial = material
   }
 
-  private func applyRaritySettings() {
-    uniforms.holoIntensity = rarity.holoIntensity
-    uniforms.baseTint = rarity.baseTint
+  private func applyRaritySettings(face: CardFaceData) {
+    let theme = CardFaceTheme.theme(for: face)
+    uniforms.holoIntensity = theme.holoIntensity
+    uniforms.baseTint = theme.holoTint
     uniforms.fresnelPower = rarity.fresnelPower
     uniforms.shininess = 0.9
     uniforms.cornerRadius = Float(CardDimensions.cornerRadius / CardDimensions.height)
   }
 
-  private func startLegendaryPulseIfNeeded() {
-    guard rarity == .legendary, let glowNode else { return }
-    let up = SCNAction.fadeOpacity(to: 0.85, duration: 1.1)
-    let down = SCNAction.fadeOpacity(to: 0.45, duration: 1.1)
+  private func startGlowPulseIfNeeded() {
+    guard let glowNode else { return }
+    let peak: CGFloat = rarity == .legendary ? 0.95 : 0.72
+    let floor: CGFloat = rarity == .legendary ? 0.42 : 0.28
+    let up = SCNAction.fadeOpacity(to: peak, duration: rarity == .legendary ? 0.95 : 1.2)
+    let down = SCNAction.fadeOpacity(to: floor, duration: rarity == .legendary ? 0.95 : 1.2)
     let pulse = SCNAction.repeatForever(SCNAction.sequence([up, down]))
     glowNode.runAction(pulse, forKey: pulseActionKey)
   }
+}
 
+private func clamp(_ value: Float, min minValue: Float, max maxValue: Float) -> Float {
+  Swift.max(minValue, Swift.min(maxValue, value))
 }

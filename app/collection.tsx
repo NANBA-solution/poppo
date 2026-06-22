@@ -107,6 +107,7 @@ export default function CollectionScreen() {
                   rarity={rarity}
                   flavorIndex={flavorIndex}
                   entryId={item.id}
+                  imageFraming={item.imageFraming}
                   size="grid"
                   onPress={() =>
                     router.push({ pathname: '/entry/[id]', params: { id: item.id } })

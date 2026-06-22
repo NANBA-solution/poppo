@@ -152,6 +152,7 @@ export default function EntryDetailScreen() {
                   rarity={rarity}
                   flavorIndex={flavorIndex}
                   entryId={entry.id}
+                  imageFraming={entry.imageFraming}
                   size="share"
                 />
               </View>

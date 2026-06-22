@@ -10,6 +10,7 @@ import {
   getPigeonCollection,
   getPigeonCount,
   savePigeonScan,
+  updatePigeonImageFraming,
 } from '@/services/collectionService';
 import { handleScanGoalAchievement } from '@/services/collectionGoalService';
 import { notifyGoalReached } from '@/services/collectionGoalNotificationService';
@@ -17,9 +18,13 @@ import { notifyQuestsCompleted } from '@/services/questNotificationService';
 import { detectNewQuests, getQuestTitle } from '@/services/questService';
 import { recognizePigeonLocally } from '@/services/pigeonDetectService';
 import { isNotPigeonError } from '@/types/scan';
-import type { CardRarity } from '@/types/collection';
+import type { CardImageFraming, CardRarity } from '@/types/collection';
 import { colors } from '@/theme/tokens';
 import { getRarityRevealMessage } from '@/utils/rarityLabel';
+import {
+  DEFAULT_CARD_IMAGE_FRAMING,
+  normalizeCardImageFraming,
+} from '@/utils/cardImageFraming';
 import { hapticSuccess, hapticWarning } from '@/utils/haptics';
 import { playQuestComplete, preloadQuestComplete } from '@/utils/questSound';
 import { sharePigeonImageWithFallback } from '@/utils/sharePigeon';
@@ -70,6 +75,10 @@ export default function ResultScreen() {
   const [displayUri, setDisplayUri] = React.useState<string | undefined>(imageUri);
   const [retryKey, setRetryKey] = React.useState(0);
   const [newQuestTitles, setNewQuestTitles] = React.useState<string[]>([]);
+  const [imageFraming, setImageFraming] = React.useState<CardImageFraming>(
+    DEFAULT_CARD_IMAGE_FRAMING,
+  );
+  const framingSaveTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   React.useEffect(() => {
     preloadQuestComplete();
@@ -90,6 +99,7 @@ export default function ResultScreen() {
       setSavedFlavorIndex(0);
       setScanNo(null);
       setNewQuestTitles([]);
+      setImageFraming(DEFAULT_CARD_IMAGE_FRAMING);
       return;
     }
 
@@ -105,6 +115,7 @@ export default function ResultScreen() {
       setSavedFlavorIndex(0);
       setScanNo(null);
       setNewQuestTitles([]);
+      setImageFraming(DEFAULT_CARD_IMAGE_FRAMING);
       try {
         await recognizePigeonLocally(imageUri);
         const before = await getPigeonCollection();
@@ -122,6 +133,7 @@ export default function ResultScreen() {
           setSavedFlavorIndex(entry.flavorIndex ?? 0);
           setScanNo(total);
           setDisplayUri(entry.imageUri);
+          setImageFraming(normalizeCardImageFraming(entry.imageFraming));
           setNewQuestTitles(questTitles);
           setPhase('success');
           void hapticSuccess();
@@ -165,6 +177,24 @@ export default function ResultScreen() {
     };
   }, [imageUri, retryKey, t]);
 
+  React.useEffect(() => {
+    return () => {
+      if (framingSaveTimer.current) clearTimeout(framingSaveTimer.current);
+    };
+  }, []);
+
+  const handleImageFramingChange = React.useCallback(
+    (next: CardImageFraming) => {
+      setImageFraming(next);
+      if (!savedEntryId) return;
+      if (framingSaveTimer.current) clearTimeout(framingSaveTimer.current);
+      framingSaveTimer.current = setTimeout(() => {
+        void updatePigeonImageFraming(savedEntryId, next);
+      }, 280);
+    },
+    [savedEntryId],
+  );
+
   const handleRetry = React.useCallback(() => {
     setRetryKey((k) => k + 1);
   }, []);
@@ -207,6 +237,9 @@ export default function ResultScreen() {
                   rarity={savedRarity}
                   flavorIndex={savedFlavorIndex}
                   entryId={savedEntryId ?? undefined}
+                  imageFraming={imageFraming}
+                  framingEditable
+                  onImageFramingChange={handleImageFramingChange}
                   size="share"
                 />
               </View>
@@ -238,6 +271,9 @@ export default function ResultScreen() {
           <View style={styles.rarityBanner}>
             <Text style={styles.rarityBannerText}>{rarityReveal}</Text>
           </View>
+        ) : null}
+        {phase === 'success' ? (
+          <Text style={styles.framingHint}>{t.scan.framingHint}</Text>
         ) : null}
         {phase === 'success' && newQuestTitles.length > 0 && (
           <View style={styles.questBanner}>
@@ -345,6 +381,14 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     textAlign: 'center',
     letterSpacing: 0.8,
+  },
+  framingHint: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+    paddingHorizontal: 12,
+    paddingBottom: 4,
   },
   savedLink: {
     alignItems: 'center',

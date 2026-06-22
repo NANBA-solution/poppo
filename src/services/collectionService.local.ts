@@ -9,8 +9,9 @@ import {
 /** アプリ専用ストレージ（カメラロール・クラウドには保存しない） */
 
 import { ensureEntryRarity, rollRarityForNewScan } from '@/services/rarityService';
-import type { PigeonEntry } from '@/types/collection';
+import type { CardImageFraming, PigeonEntry } from '@/types/collection';
 import type { PigeonScanJson } from '@/types/scan';
+import { normalizeCardImageFraming } from '@/utils/cardImageFraming';
 
 const STORAGE_KEY = '@poppo/collection/v1';
 export const SCAN_DIR = `${documentDirectory ?? ''}poppo-scans/`;
@@ -117,6 +118,25 @@ export async function deletePigeonScanLocal(id: string): Promise<boolean> {
   }
 
   return true;
+}
+
+export async function updatePigeonImageFramingLocal(
+  id: string,
+  framing: CardImageFraming,
+): Promise<PigeonEntry | null> {
+  const all = await readAllLocal();
+  const index = all.findIndex((entry) => entry.id === id);
+  if (index < 0) return null;
+
+  const nextFraming = normalizeCardImageFraming(framing);
+  const updated: PigeonEntry = {
+    ...all[index]!,
+    imageFraming: nextFraming,
+  };
+  const next = [...all];
+  next[index] = updated;
+  await writeAllLocal(next);
+  return updated;
 }
 
 export async function clearAllCollectionLocal(): Promise<number> {

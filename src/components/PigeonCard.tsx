@@ -1,6 +1,10 @@
+import { CardPhotoFrame } from '@/components/CardPhotoFrame';
 import { useI18n } from '@/i18n/I18nProvider';
 import { colors } from '@/theme/tokens';
-import type { CardRarity } from '@/types/collection';
+import type { CardImageFraming, CardRarity } from '@/types/collection';
+import {
+  normalizeCardImageFraming,
+} from '@/utils/cardImageFraming';
 import { formatScanLabel } from '@/utils/scanLabel';
 import { toHoloCardRarity } from '@/utils/holoCardRarity';
 import { isPoppoCardsNativeAvailable } from '@/utils/nativeAvailability';
@@ -10,7 +14,9 @@ import {
 } from '@/utils/cardMoveGenerator';
 import {
   getCardAttackDamage,
+  getCardHp,
   getCardPowerStars,
+  getCardRetreatCost,
   getRarityFlavor,
   getRarityLabel,
 } from '@/utils/rarityLabel';
@@ -18,7 +24,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { PoppoHoloCardView } from 'poppo-cards';
 import * as React from 'react';
 import {
-  Image,
   Platform,
   Pressable,
   StyleSheet,
@@ -27,7 +32,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import Svg, { Defs, Line, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
+import Svg, { Defs, Ellipse, G, Line, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 
 type PigeonCardSize = 'grid' | 'detail' | 'share';
 
@@ -37,6 +42,9 @@ type PigeonCardProps = {
   rarity: CardRarity;
   flavorIndex: number;
   entryId?: string;
+  imageFraming?: Partial<CardImageFraming> | null;
+  framingEditable?: boolean;
+  onImageFramingChange?: (framing: CardImageFraming) => void;
   size?: PigeonCardSize;
   style?: StyleProp<ViewStyle>;
   onPress?: () => void;
@@ -52,6 +60,7 @@ type RarityFinish = {
   ink: string;
   muted: string;
   paper: readonly [string, string, ...string[]];
+  textBox?: readonly [string, string, ...string[]];
   holoBands: readonly (readonly [string, string, ...string[]])[];
   dark?: boolean;
 };
@@ -67,6 +76,7 @@ const FINISH: Record<CardRarity, RarityFinish> = {
     ink: colors.ink,
     muted: colors.textMuted,
     paper: ['#FAF7F2', '#F2EDE4', '#E8E2D8'],
+    textBox: ['#FFFDF9', '#F7F2EA'],
     holoBands: [],
   },
   R: {
@@ -79,66 +89,121 @@ const FINISH: Record<CardRarity, RarityFinish> = {
     ink: colors.ink,
     muted: '#5A6A78',
     paper: ['#F6FAFC', '#EAF0F4', '#DEE8EE'],
+    textBox: ['#F8FBFD', '#EEF4F8'],
     holoBands: [
-      ['rgba(180,210,240,0)', 'rgba(200,225,255,0.35)', 'rgba(255,255,255,0.15)', 'rgba(180,210,240,0)'],
-      ['rgba(255,255,255,0)', 'rgba(160,190,220,0.25)', 'rgba(255,255,255,0)'],
+      ['rgba(180,210,255,0.05)', 'rgba(220,235,255,0.55)', 'rgba(255,255,255,0.35)', 'rgba(180,210,255,0.05)'],
+      ['rgba(255,255,255,0)', 'rgba(160,200,255,0.45)', 'rgba(255,255,255,0.2)', 'rgba(255,255,255,0)'],
+      ['rgba(120,170,220,0)', 'rgba(200,225,255,0.4)', 'rgba(120,170,220,0)'],
     ],
   },
   SR: {
-    frame: ['#6A4E10', '#D4AF37', '#FFF0C0', '#C9A227', '#4A3808'],
+    frame: ['#8A6010', '#FFD700', '#FFF8D0', '#E8C040', '#5A4008'],
     frameShadow: '#2A2008',
     plate: ['#E8D080', '#FFF4C8', '#D4B050'],
     accent: '#8A6808',
     accentBright: '#D4AF37',
     accentSoftBg: 'rgba(138,104,8,0.2)',
-    ink: '#2A2008',
-    muted: '#6A5830',
+    ink: colors.ink,
+    muted: colors.textMuted,
     paper: ['#FFF8E8', '#F8EED0', '#F0E4B8'],
+    textBox: ['#FFFBF0', '#F8EFD4'],
     holoBands: [
-      ['rgba(255,220,120,0)', 'rgba(255,200,80,0.45)', 'rgba(255,255,200,0.2)', 'rgba(255,180,60,0)'],
-      ['rgba(255,255,255,0)', 'rgba(255,230,150,0.3)', 'rgba(255,200,100,0.15)', 'rgba(255,255,255,0)'],
-      ['rgba(200,160,60,0)', 'rgba(255,240,180,0.35)', 'rgba(200,160,60,0)'],
+      ['rgba(255,220,80,0.08)', 'rgba(255,210,60,0.65)', 'rgba(255,255,220,0.35)', 'rgba(255,180,40,0.08)'],
+      ['rgba(255,255,255,0)', 'rgba(255,240,160,0.5)', 'rgba(255,200,80,0.28)', 'rgba(255,255,255,0)'],
+      ['rgba(255,200,60,0)', 'rgba(255,245,180,0.5)', 'rgba(255,200,60,0)'],
+      ['rgba(255,255,255,0)', 'rgba(255,255,255,0.25)', 'rgba(255,255,255,0)'],
     ],
   },
   UR: {
-    frame: ['#3A2860', '#9070D0', '#E8D8FF', '#7050B0', '#281848'],
+    frame: ['#4A2878', '#B090F0', '#F0E0FF', '#8060C8', '#281848'],
     frameShadow: '#181028',
     plate: ['#C8B0F0', '#F0E8FF', '#A890E0'],
     accent: '#5A4090',
     accentBright: '#9070D0',
     accentSoftBg: 'rgba(90,64,144,0.2)',
-    ink: '#1E1438',
-    muted: '#5A4878',
+    ink: colors.ink,
+    muted: '#3A3832',
     paper: ['#F4EEFF', '#E8DEFF', '#DDD0F8'],
+    textBox: ['#F9F5FF', '#EEE4FF'],
     holoBands: [
-      ['rgba(180,140,255,0)', 'rgba(200,160,255,0.5)', 'rgba(255,220,255,0.2)', 'rgba(140,100,220,0)'],
-      ['rgba(255,255,255,0)', 'rgba(180,140,255,0.35)', 'rgba(100,200,255,0.2)', 'rgba(255,255,255,0)'],
-      ['rgba(100,180,255,0)', 'rgba(220,180,255,0.3)', 'rgba(100,180,255,0)'],
+      ['rgba(180,140,255,0.08)', 'rgba(210,170,255,0.7)', 'rgba(255,230,255,0.38)', 'rgba(140,100,220,0.08)'],
+      ['rgba(255,255,255,0)', 'rgba(190,150,255,0.5)', 'rgba(120,200,255,0.32)', 'rgba(255,255,255,0)'],
+      ['rgba(100,180,255,0)', 'rgba(230,190,255,0.45)', 'rgba(100,180,255,0)'],
+      ['rgba(255,255,255,0)', 'rgba(255,255,255,0.3)', 'rgba(255,255,255,0)'],
     ],
   },
   SECRET: {
-    frame: ['#0A0A0A', '#D4AF37', '#2D6A4F', '#C9A227', '#050505'],
+    frame: ['#0A0A0A', '#FFD700', '#2D8A5F', '#E8C040', '#050505'],
     frameShadow: '#000000',
-    plate: ['#1A1A1A', '#2A2820', '#121210'],
-    accent: '#D4AF37',
-    accentBright: '#95D5B2',
-    accentSoftBg: 'rgba(212,175,55,0.15)',
-    ink: '#F5F1EA',
-    muted: 'rgba(245,241,234,0.55)',
-    paper: ['#1E1E1C', '#161614', '#10100E'],
+    plate: ['#F7F4EA', '#ECE4D0', '#DDD2B8'],
+    accent: '#8A6808',
+    accentBright: '#2D6A4F',
+    accentSoftBg: 'rgba(212,175,55,0.2)',
+    ink: colors.ink,
+    muted: '#3A3832',
+    paper: ['#FAF8F2', '#F3EEDF', '#EBE4D2'],
+    textBox: ['#FFFDF8', '#F5F0E2'],
     holoBands: [
-      ['rgba(212,175,55,0.08)', 'rgba(149,213,178,0.35)', 'rgba(212,175,55,0.08)'],
-      ['rgba(255,255,255,0)', 'rgba(212,175,55,0.25)', 'rgba(45,106,79,0.2)', 'rgba(255,255,255,0)'],
-      ['rgba(45,106,79,0)', 'rgba(212,175,55,0.3)', 'rgba(45,106,79,0)'],
+      ['rgba(212,175,55,0.12)', 'rgba(149,213,178,0.55)', 'rgba(255,230,140,0.35)', 'rgba(212,175,55,0.12)'],
+      ['rgba(255,255,255,0)', 'rgba(212,175,55,0.45)', 'rgba(45,140,90,0.3)', 'rgba(255,255,255,0)'],
+      ['rgba(45,106,79,0)', 'rgba(255,230,150,0.45)', 'rgba(45,106,79,0)'],
+      ['rgba(255,255,255,0)', 'rgba(255,255,255,0.28)', 'rgba(255,255,255,0)'],
     ],
-    dark: true,
   },
 };
 
 const LAYOUT = {
-  grid: { frame: 5, gap: 3, name: 10, sub: 7, artFlex: 1.35, showMove2: false, showMoveDesc: false, flavorLines: 1 },
-  detail: { frame: 6, gap: 4, name: 12, sub: 9, artFlex: 1.25, showMove2: true, showMoveDesc: true, flavorLines: 2 },
-  share: { frame: 7, gap: 5, name: 15, sub: 11, artFlex: 1.28, showMove2: true, showMoveDesc: true, flavorLines: 2 },
+  grid: {
+    frame: 5,
+    gap: 2,
+    name: 9,
+    sub: 6,
+    meta: 5,
+    artFlex: 1.02,
+    showMove2: true,
+    showMoveDesc: true,
+    showMove2Desc: false,
+    showMeta: true,
+    showProfile: false,
+    showStats: true,
+    showCosts: false,
+    showBrand: true,
+    flavorLines: 2,
+  },
+  detail: {
+    frame: 6,
+    gap: 3,
+    name: 11,
+    sub: 8,
+    meta: 6,
+    artFlex: 1.05,
+    showMove2: true,
+    showMoveDesc: true,
+    showMove2Desc: true,
+    showMeta: true,
+    showProfile: true,
+    showStats: true,
+    showCosts: false,
+    showBrand: true,
+    flavorLines: 3,
+  },
+  share: {
+    frame: 7,
+    gap: 4,
+    name: 14,
+    sub: 10,
+    meta: 7,
+    artFlex: 1.08,
+    showMove2: true,
+    showMoveDesc: true,
+    showMove2Desc: true,
+    showMeta: true,
+    showProfile: true,
+    showStats: true,
+    showCosts: false,
+    showBrand: true,
+    flavorLines: 3,
+  },
 } as const;
 
 function HoloBands({ bands }: { bands: RarityFinish['holoBands'] }) {
@@ -151,10 +216,65 @@ function HoloBands({ bands }: { bands: RarityFinish['holoBands'] }) {
           colors={colors}
           start={{ x: 0, y: i * 0.3 }}
           end={{ x: 1, y: 0.7 + i * 0.2 }}
-          style={[StyleSheet.absoluteFillObject, { opacity: 0.55 + i * 0.08 }]}
+          style={[StyleSheet.absoluteFillObject, { opacity: 0.68 + i * 0.1 }]}
         />
       ))}
     </View>
+  );
+}
+
+function LameFlakes({
+  seed,
+  accent,
+  rarity,
+}: {
+  seed: number;
+  accent: string;
+  rarity: CardRarity;
+}) {
+  const count =
+    rarity === 'SECRET' ? 52
+    : rarity === 'UR' ? 46
+    : rarity === 'SR' ? 40
+    : rarity === 'R' ? 34
+    : 0;
+  if (count === 0) return null;
+
+  const flakes = React.useMemo(
+    () =>
+      Array.from({ length: count }, (_, i) => {
+        const u1 = (seed * 73 + i * 131) % 1000;
+        const u2 = (seed * 197 + i * 89) % 1000;
+        const u3 = (seed * 311 + i * 53) % 1000;
+        const u4 = (seed * 419 + i * 71) % 1000;
+        return {
+          cx: (u1 % 900) / 10 + 5,
+          cy: (u2 % 880) / 10 + 6,
+          rx: 0.7 + (u3 % 9) * 0.28,
+          ry: 0.14 + (u4 % 6) * 0.07,
+          angle: u3 % 360,
+          opacity: 0.38 + (u4 % 10) * 0.045,
+          color: i % 5 === 0 ? '#FFFFFF' : i % 3 === 0 ? '#FFF6D8' : accent,
+        };
+      }),
+    [accent, count, seed],
+  );
+
+  return (
+    <Svg viewBox="0 0 100 100" style={StyleSheet.absoluteFillObject} pointerEvents="none">
+      {flakes.map((flake, i) => (
+        <G key={i} rotation={flake.angle} origin={`${flake.cx}, ${flake.cy}`}>
+          <Ellipse
+            cx={flake.cx}
+            cy={flake.cy}
+            rx={flake.rx}
+            ry={flake.ry}
+            fill={flake.color}
+            opacity={flake.opacity}
+          />
+        </G>
+      ))}
+    </Svg>
   );
 }
 
@@ -169,7 +289,7 @@ function HoloLines({ accent, id }: { accent: string; id: string }) {
           <Stop offset="100%" stopColor="transparent" />
         </SvgGradient>
       </Defs>
-      {Array.from({ length: 14 }, (_, i) => (
+      {Array.from({ length: 20 }, (_, i) => (
         <Line
           key={i}
           x1={`${-20 + i * 12}%`}
@@ -178,7 +298,7 @@ function HoloLines({ accent, id }: { accent: string; id: string }) {
           y2="100%"
           stroke={`url(#${id})`}
           strokeWidth={1.2}
-          opacity={0.55}
+          opacity={0.72}
         />
       ))}
     </Svg>
@@ -216,7 +336,7 @@ function PaperGrain({ dark }: { dark?: boolean }) {
 
 function CardPaper({ finish }: { finish: RarityFinish }) {
   return (
-    <>
+    <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>
       <LinearGradient colors={finish.paper} style={StyleSheet.absoluteFillObject} />
       <PaperGrain dark={finish.dark} />
       <LinearGradient
@@ -226,7 +346,7 @@ function CardPaper({ finish }: { finish: RarityFinish }) {
         style={StyleSheet.absoluteFillObject}
         pointerEvents="none"
       />
-    </>
+    </View>
   );
 }
 
@@ -248,6 +368,9 @@ export function PigeonCard({
   rarity,
   flavorIndex,
   entryId,
+  imageFraming,
+  framingEditable = false,
+  onImageFramingChange,
   size = 'grid',
   style,
   onPress,
@@ -258,35 +381,65 @@ export function PigeonCard({
   const label = getRarityLabel(rarity, t);
   const flavor = getRarityFlavor(rarity, flavorIndex, t);
   const powerStars = getCardPowerStars(rarity, scanNo);
+  const hp = getCardHp(rarity, scanNo);
+  const retreat = getCardRetreatCost(rarity, scanNo);
   const name = formatScanLabel(scanNo, t);
   const serial = `${t.card.serial}${String(scanNo).padStart(3, '0')}`;
   const moveSeed = buildMoveSeed(entryId, scanNo, flavorIndex);
   const [move1, move2] = generateCardMoves({ seed: moveSeed, locale, rarity });
   const dmg1 = getCardAttackDamage(rarity, scanNo, 1);
   const dmg2 = getCardAttackDamage(rarity, scanNo, 2);
+  const showSecondMoveDesc =
+    layout.showMove2Desc && move2.desc.length > 0 && move2.desc !== move1.desc;
   const holoId = `holo-${entryId ?? scanNo}`;
   const hasHolo = finish.holoBands.length > 0;
+  const framing = normalizeCardImageFraming(imageFraming);
+  const nativeImageUri =
+    imageUri.startsWith('file://') || imageUri.startsWith('data:') || imageUri.startsWith('http')
+      ? imageUri
+      : `file://${imageUri}`;
 
-  const useNativeHolo = Platform.OS === 'ios' && isPoppoCardsNativeAvailable();
+  const useNativeHolo =
+    Platform.OS === 'ios' && isPoppoCardsNativeAvailable() && !framingEditable;
 
   if (useNativeHolo) {
     const holoCard = (
       <View style={[styles.shell, style]}>
         <PoppoHoloCardView
-          imageUri={imageUri}
+          imageUri={nativeImageUri}
+          imageScale={framing.scale}
+          imageOffsetX={framing.offsetX}
+          imageOffsetY={framing.offsetY}
           rarity={toHoloCardRarity(rarity)}
           cardName={name}
+          typeLong={t.card.typeLong}
+          profile={t.card.profile}
           rarityLabel={label}
           serial={serial}
           starCount={powerStars}
+          hp={String(hp)}
+          retreatCost={String(retreat)}
           move1Name={move1.name}
           move1Damage={String(dmg1)}
+          move1Cost=""
           move2Name={move2.name}
           move2Damage={String(dmg2)}
+          move2Cost=""
           moveDescription={move1.desc}
+          move2Description={move2.desc}
+          moveTraitLabel={t.card.moveTrait}
           flavor={flavor}
+          brandLine={t.card.brandLine}
+          hpLabel={t.card.hp}
+          retreatLabel={t.card.retreat}
           showMove2={layout.showMove2}
           showMoveDesc={layout.showMoveDesc}
+          showMove2Desc={showSecondMoveDesc}
+          showMeta={layout.showMeta}
+          showProfile={layout.showProfile}
+          showStats={layout.showStats}
+          showCosts={layout.showCosts}
+          showBrand={layout.showBrand}
           layout="single"
         />
       </View>
@@ -343,7 +496,29 @@ export function PigeonCard({
                 />
               </View>
 
-              <View style={[styles.artSection, { flex: layout.artFlex }]}>
+              {layout.showMeta ? (
+                <View style={styles.metaRow}>
+                  <Text
+                    style={[styles.typeLong, { color: finish.ink, fontSize: layout.meta }]}
+                    numberOfLines={1}
+                  >
+                    {t.card.typeLong}
+                  </Text>
+                  {layout.showStats ? (
+                    <Text style={[styles.hpText, { color: finish.ink, fontSize: layout.meta }]}>
+                      {t.card.hp} {hp}
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
+
+              <View
+                style={[
+                  styles.artSection,
+                  { flex: layout.artFlex },
+                  framingEditable && styles.artSectionEditable,
+                ]}
+              >
                 <View
                   style={[
                     styles.artRecess,
@@ -356,15 +531,30 @@ export function PigeonCard({
                   ]}
                 >
                   <View style={styles.artInner}>
-                    <Image source={{ uri: imageUri }} style={styles.art} resizeMode="cover" accessibilityLabel={name} />
-                    {hasHolo ? <HoloBands bands={finish.holoBands} /> : null}
-                    {hasHolo ? <HoloLines accent={finish.accentBright} id={holoId} /> : null}
-                    <LinearGradient
-                      colors={['rgba(255,255,255,0.2)', 'transparent', 'rgba(0,0,0,0.15)']}
-                      locations={[0, 0.4, 1]}
-                      style={StyleSheet.absoluteFillObject}
-                      pointerEvents="none"
-                    />
+                    <CardPhotoFrame
+                      uri={imageUri}
+                      framing={framing}
+                      editable={framingEditable}
+                      onFramingChange={onImageFramingChange}
+                      accessibilityLabel={name}
+                      style={styles.artPhotoClip}
+                    >
+                      {hasHolo ? <HoloBands bands={finish.holoBands} /> : null}
+                      {hasHolo ? <HoloLines accent={finish.accentBright} id={holoId} /> : null}
+                      {hasHolo ? (
+                        <LameFlakes
+                          seed={scanNo + flavorIndex * 17}
+                          accent={finish.accentBright}
+                          rarity={rarity}
+                        />
+                      ) : null}
+                      <LinearGradient
+                        colors={['rgba(255,255,255,0.2)', 'transparent', 'rgba(0,0,0,0.15)']}
+                        locations={[0, 0.4, 1]}
+                        style={StyleSheet.absoluteFillObject}
+                        pointerEvents="none"
+                      />
+                    </CardPhotoFrame>
                   </View>
                 </View>
               </View>
@@ -387,6 +577,15 @@ export function PigeonCard({
                 </Text>
               </LinearGradient>
 
+              {layout.showProfile ? (
+                <Text
+                  style={[styles.profileLine, { color: finish.muted, fontSize: layout.sub - 1 }]}
+                  numberOfLines={1}
+                >
+                  {t.card.profile}
+                </Text>
+              ) : null}
+
               <View
                 style={[
                   styles.textBox,
@@ -395,30 +594,41 @@ export function PigeonCard({
                     borderLeftColor: finish.dark ? 'rgba(0,0,0,0.45)' : 'rgba(0,0,0,0.1)',
                     borderBottomColor: finish.dark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.7)',
                     borderRightColor: finish.dark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.58)',
-                    backgroundColor: finish.dark ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.55)',
+                    backgroundColor: finish.textBox?.[0] ?? 'rgba(255,255,255,0.82)',
                   },
                 ]}
               >
-                <View style={styles.attackRow}>
-                  <Text style={[styles.moveLine, { color: finish.ink, fontSize: layout.sub, flex: 1 }]} numberOfLines={1}>
-                    <Text style={{ color: finish.accent, fontWeight: '900' }}>{move1.name}</Text>
-                  </Text>
-                  <Text style={[styles.damage, { color: finish.ink, fontSize: layout.sub }]}>{dmg1}</Text>
-                </View>
-                {layout.showMove2 ? (
+                <View style={styles.moveBlock}>
                   <View style={styles.attackRow}>
                     <Text style={[styles.moveLine, { color: finish.ink, fontSize: layout.sub, flex: 1 }]} numberOfLines={1}>
-                      <Text style={{ color: finish.accent, fontWeight: '900' }}>{move2.name}</Text>
+                      <Text style={{ color: finish.ink, fontWeight: '900' }}>{move1.name}</Text>
                     </Text>
-                    <Text style={[styles.damage, { color: finish.ink, fontSize: layout.sub }]}>
-                      {dmg2}
-                    </Text>
+                    <Text style={[styles.damage, { color: finish.ink, fontSize: layout.sub }]}>{dmg1}</Text>
                   </View>
-                ) : null}
-                {layout.showMoveDesc ? (
-                  <Text style={[styles.moveDesc, { color: finish.muted, fontSize: layout.sub - 1 }]} numberOfLines={2}>
-                    {move1.desc}
-                  </Text>
+                  {layout.showMoveDesc && move1.desc ? (
+                    <Text style={[styles.moveTrait, { fontSize: layout.sub - 1 }]} numberOfLines={2}>
+                      <Text style={{ color: finish.accent, fontWeight: '700' }}>{t.card.moveTrait} </Text>
+                      <Text style={{ color: finish.muted }}>{move1.desc}</Text>
+                    </Text>
+                  ) : null}
+                </View>
+                {layout.showMove2 ? (
+                  <View style={styles.moveBlock}>
+                    <View style={styles.attackRow}>
+                      <Text style={[styles.moveLine, { color: finish.ink, fontSize: layout.sub, flex: 1 }]} numberOfLines={1}>
+                        <Text style={{ color: finish.ink, fontWeight: '900' }}>{move2.name}</Text>
+                      </Text>
+                      <Text style={[styles.damage, { color: finish.ink, fontSize: layout.sub }]}>
+                        {dmg2}
+                      </Text>
+                    </View>
+                    {showSecondMoveDesc ? (
+                      <Text style={[styles.moveTrait, { fontSize: layout.sub - 1 }]} numberOfLines={2}>
+                        <Text style={{ color: finish.accent, fontWeight: '700' }}>{t.card.moveTrait} </Text>
+                        <Text style={{ color: finish.muted }}>{move2.desc}</Text>
+                      </Text>
+                    ) : null}
+                  </View>
                 ) : null}
                 <View style={[styles.ruleLine, { backgroundColor: finish.accentSoftBg }]} />
                 <Text
@@ -427,16 +637,32 @@ export function PigeonCard({
                 >
                   {flavor}
                 </Text>
+                {layout.showBrand ? (
+                  <View style={styles.brandRow}>
+                    <Text style={[styles.brandLine, { color: finish.muted, fontSize: layout.sub - 2 }]}>
+                      {t.card.brandLine}
+                    </Text>
+                    {layout.showStats ? (
+                      <Text style={[styles.retreatText, { color: finish.muted, fontSize: layout.sub - 2 }]}>
+                        {t.card.retreat} {retreat}
+                      </Text>
+                    ) : null}
+                  </View>
+                ) : null}
               </View>
 
-              {hasHolo ? (
+              {hasHolo && !framingEditable ? (
                 <LinearGradient
-                  colors={['rgba(255,255,255,0.12)', 'transparent', 'rgba(255,255,255,0.06)']}
+                  colors={['rgba(255,255,255,0.22)', 'transparent', 'rgba(255,255,255,0.1)']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.foilWash}
                   pointerEvents="none"
                 />
+              ) : null}
+
+              {hasHolo && !framingEditable ? (
+                <LameFlakes seed={scanNo * 3 + flavorIndex} accent={finish.accentBright} rarity={rarity} />
               ) : null}
 
               <LinearGradient
@@ -530,8 +756,27 @@ const styles = StyleSheet.create({
     gap: 4,
     zIndex: 2,
   },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 4,
+    zIndex: 2,
+  },
+  typeLong: {
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    flex: 1,
+  },
+  hpText: {
+    fontWeight: '900',
+    fontVariant: ['tabular-nums'],
+  },
   artSection: {
     minHeight: 0,
+  },
+  artSectionEditable: {
+    zIndex: 10,
   },
   artRecess: {
     flex: 1,
@@ -546,9 +791,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#111',
   },
-  art: {
-    width: '100%',
-    height: '100%',
+  artPhotoClip: {
+    flex: 1,
+    borderRadius: 4,
   },
   nameBar: {
     borderRadius: 4,
@@ -574,6 +819,12 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
     textAlign: 'center',
   },
+  profileLine: {
+    textAlign: 'center',
+    fontWeight: '600',
+    letterSpacing: 0.2,
+    zIndex: 2,
+  },
   serial: {
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
@@ -598,7 +849,12 @@ const styles = StyleSheet.create({
   attackRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
+  },
+  moveCost: {
+    fontWeight: '900',
+    minWidth: 14,
+    textAlign: 'center',
   },
   moveLine: {
     fontWeight: '700',
@@ -614,7 +870,11 @@ const styles = StyleSheet.create({
     height: 1,
     marginVertical: 1,
   },
-  moveDesc: {
+  moveBlock: {
+    gap: 2,
+    marginBottom: 4,
+  },
+  moveTrait: {
     lineHeight: 11,
     fontStyle: 'italic',
   },
@@ -623,9 +883,23 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     fontWeight: '500',
   },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 1,
+  },
+  brandLine: {
+    fontWeight: '900',
+    letterSpacing: 1.2,
+  },
+  retreatText: {
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
   foilWash: {
     ...StyleSheet.absoluteFillObject,
-    opacity: 0.5,
+    opacity: 0.72,
   },
   laminate: {
     ...StyleSheet.absoluteFillObject,
