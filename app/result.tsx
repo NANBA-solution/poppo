@@ -1,3 +1,4 @@
+import { PigeonCard } from '@/components/PigeonCard';
 import { ShareCaptureFrame } from '@/components/ShareCaptureFrame';
 import { SocialShareButtons } from '@/components/SocialShareButtons';
 import { ActionFooter, FooterButton } from '@/components/ui/ActionFooter';
@@ -16,7 +17,9 @@ import { notifyQuestsCompleted } from '@/services/questNotificationService';
 import { detectNewQuests, getQuestTitle } from '@/services/questService';
 import { recognizePigeonLocally } from '@/services/pigeonDetectService';
 import { isNotPigeonError } from '@/types/scan';
+import type { CardRarity } from '@/types/collection';
 import { colors } from '@/theme/tokens';
+import { getRarityRevealMessage } from '@/utils/rarityLabel';
 import { hapticSuccess, hapticWarning } from '@/utils/haptics';
 import { playQuestComplete, preloadQuestComplete } from '@/utils/questSound';
 import { sharePigeonImageWithFallback } from '@/utils/sharePigeon';
@@ -61,6 +64,8 @@ export default function ResultScreen() {
   const [errorTitle, setErrorTitle] = React.useState<string | undefined>();
   const [notPigeon, setNotPigeon] = React.useState(false);
   const [savedEntryId, setSavedEntryId] = React.useState<string | null>(null);
+  const [savedRarity, setSavedRarity] = React.useState<CardRarity>('N');
+  const [savedFlavorIndex, setSavedFlavorIndex] = React.useState(0);
   const [scanNo, setScanNo] = React.useState<number | null>(null);
   const [displayUri, setDisplayUri] = React.useState<string | undefined>(imageUri);
   const [retryKey, setRetryKey] = React.useState(0);
@@ -81,6 +86,8 @@ export default function ResultScreen() {
       setErrorTitle(undefined);
       setNotPigeon(false);
       setSavedEntryId(null);
+      setSavedRarity('N');
+      setSavedFlavorIndex(0);
       setScanNo(null);
       setNewQuestTitles([]);
       return;
@@ -94,6 +101,8 @@ export default function ResultScreen() {
       setErrorTitle(undefined);
       setNotPigeon(false);
       setSavedEntryId(null);
+      setSavedRarity('N');
+      setSavedFlavorIndex(0);
       setScanNo(null);
       setNewQuestTitles([]);
       try {
@@ -109,6 +118,8 @@ export default function ResultScreen() {
           const questTitles = newQuestIds.map((id) => getQuestTitle(id, t));
           const total = await getPigeonCount();
           setSavedEntryId(entry.id);
+          setSavedRarity(entry.rarity ?? 'N');
+          setSavedFlavorIndex(entry.flavorIndex ?? 0);
           setScanNo(total);
           setDisplayUri(entry.imageUri);
           setNewQuestTitles(questTitles);
@@ -180,27 +191,42 @@ export default function ResultScreen() {
   }, [displayUri, locale, phase, scanNo, shareBusy, t.common.shareError, t.common.shareFailed]);
 
   const cardPhase = phase === 'idle' ? 'loading' : phase;
+  const rarityReveal =
+    phase === 'success' ? getRarityRevealMessage(savedRarity, t) : null;
 
   return (
     <Screen edges={false} pigeons={false}>
       <View style={[styles.stage, { paddingTop: insets.top }]}>
         {displayUri ? (
           <View ref={shareRef} style={styles.shareWrap} collapsable={false}>
-            <ShareCaptureFrame
-              imageUri={displayUri}
-              phase={cardPhase}
-              scanNo={phase === 'success' ? scanNo : null}
-              headline={
-                phase === 'success' && scanNo != null
-                  ? formatScanLabel(scanNo, t)
-                  : undefined
-              }
-              ugc={phase === 'success'}
-              error={saveError}
-              errorTitle={errorTitle}
-              subtitle={phase === 'success' ? t.scan.saved : undefined}
-              minimal
-            />
+            {phase === 'success' && scanNo != null ? (
+              <View style={styles.cardStage}>
+                <PigeonCard
+                  imageUri={displayUri}
+                  scanNo={scanNo}
+                  rarity={savedRarity}
+                  flavorIndex={savedFlavorIndex}
+                  entryId={savedEntryId ?? undefined}
+                  size="share"
+                />
+              </View>
+            ) : (
+              <ShareCaptureFrame
+                imageUri={displayUri}
+                phase={cardPhase}
+                scanNo={phase === 'success' ? scanNo : null}
+                headline={
+                  phase === 'success' && scanNo != null
+                    ? formatScanLabel(scanNo, t)
+                    : undefined
+                }
+                ugc={phase === 'success'}
+                error={saveError}
+                errorTitle={errorTitle}
+                subtitle={phase === 'success' ? t.scan.saved : undefined}
+                minimal
+              />
+            )}
           </View>
         ) : (
           <Text style={styles.missing}>{t.scan.missingUri}</Text>
@@ -208,6 +234,11 @@ export default function ResultScreen() {
       </View>
 
       <ActionFooter>
+        {phase === 'success' && rarityReveal ? (
+          <View style={styles.rarityBanner}>
+            <Text style={styles.rarityBannerText}>{rarityReveal}</Text>
+          </View>
+        ) : null}
         {phase === 'success' && newQuestTitles.length > 0 && (
           <View style={styles.questBanner}>
             {newQuestTitles.map((title) => (
@@ -272,6 +303,15 @@ const styles = StyleSheet.create({
   },
   shareWrap: {
     flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  cardStage: {
+    flex: 1,
+    maxWidth: 340,
+    width: '100%',
+    alignSelf: 'center',
+    aspectRatio: 5 / 7,
   },
   missing: {
     flex: 1,
@@ -290,6 +330,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     textAlign: 'center',
+  },
+  rarityBanner: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    backgroundColor: 'rgba(107,91,149,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(107,91,149,0.22)',
+  },
+  rarityBannerText: {
+    color: colors.accentPurple,
+    fontSize: 15,
+    fontWeight: '900',
+    textAlign: 'center',
+    letterSpacing: 0.8,
   },
   savedLink: {
     alignItems: 'center',

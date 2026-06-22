@@ -28,6 +28,7 @@ module.exports = {
       supportsTablet: false,
       deploymentTarget: '15.5',
       bundleIdentifier: 'app.poppo.mobile',
+      appleTeamId: '54YGGGZ8F6',
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
         LSApplicationQueriesSchemes: [

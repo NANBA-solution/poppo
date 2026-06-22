@@ -8,6 +8,7 @@ import {
 
 /** アプリ専用ストレージ（カメラロール・クラウドには保存しない） */
 
+import { ensureEntryRarity, rollRarityForNewScan } from '@/services/rarityService';
 import type { PigeonEntry } from '@/types/collection';
 import type { PigeonScanJson } from '@/types/scan';
 
@@ -35,13 +36,22 @@ async function persistImage(sourceUri: string, id: string): Promise<string> {
   return dest;
 }
 
+function normalizeCollection(entries: PigeonEntry[]): PigeonEntry[] {
+  const sorted = [...entries].sort(
+    (a, b) => new Date(b.scannedAt).getTime() - new Date(a.scannedAt).getTime(),
+  );
+  return sorted.map((entry, index) =>
+    ensureEntryRarity(entry, sorted.length - index),
+  );
+}
+
 export async function readAllLocal(): Promise<PigeonEntry[]> {
   const raw = await AsyncStorage.getItem(STORAGE_KEY);
   if (!raw) return [];
   try {
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isPigeonEntry);
+    return normalizeCollection(parsed.filter(isPigeonEntry));
   } catch {
     return [];
   }
@@ -68,14 +78,24 @@ export async function savePigeonScanLocal(
 ): Promise<PigeonEntry> {
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
   const imageUri = await persistImage(sourceUri, id);
+  const scannedAt = new Date();
+  const existing = await readAllLocal();
+  const scanNo = existing.length + 1;
+  const { rarity, flavorIndex } = rollRarityForNewScan({
+    entryId: id,
+    scanNo,
+    scannedAt,
+    existingEntries: existing,
+  });
   const entry: PigeonEntry = {
     id,
     imageUri,
     breed: result.breed,
-    scannedAt: new Date().toISOString(),
+    scannedAt: scannedAt.toISOString(),
+    rarity,
+    flavorIndex,
   };
 
-  const existing = await readAllLocal();
   await writeAllLocal([entry, ...existing]);
   return entry;
 }

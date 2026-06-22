@@ -1,5 +1,5 @@
 import { AppIcon } from '@/components/icons/AppIcon';
-import { ShareCaptureFrame } from '@/components/ShareCaptureFrame';
+import { PigeonCard } from '@/components/PigeonCard';
 import { SocialShareButtons } from '@/components/SocialShareButtons';
 import { FooterButton } from '@/components/ui/ActionFooter';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -11,8 +11,7 @@ import {
 } from '@/services/collectionService';
 import type { PigeonEntry } from '@/types/collection';
 import { borders, colors, radii, shadow } from '@/theme/tokens';
-import { formatDateTime } from '@/utils/formatDate';
-import { formatScanLabel } from '@/utils/scanLabel';
+import { getRarityLabel } from '@/utils/rarityLabel';
 import { sharePigeonImageWithFallback } from '@/utils/sharePigeon';
 import { useTabRouter } from '@/hooks/useTabRouter';
 import { useLocalSearchParams } from 'expo-router';
@@ -116,13 +115,16 @@ export default function EntryDetailScreen() {
     ]);
   }, [deleting, entry, router, t.common.cancel, t.common.delete, t.common.error, t.entry.deleteBody, t.entry.deleteError, t.entry.deleteTitle]);
 
+  const rarity = entry?.rarity ?? 'N';
+  const flavorIndex = entry?.flavorIndex ?? 0;
+
   return (
     <View style={styles.screen}>
       {loading ? (
         <View style={styles.centered}>
           <ActivityIndicator color={colors.onAccent} />
         </View>
-      ) : !entry ? (
+      ) : !entry || scanNo == null ? (
         <View style={styles.centered}>
           <Text style={styles.missing}>{t.entry.notFound}</Text>
         </View>
@@ -143,29 +145,28 @@ export default function EntryDetailScreen() {
             </Pressable>
 
             <View ref={shareRef} style={styles.shareWrap} collapsable={false}>
-              <ShareCaptureFrame
-                imageUri={entry.imageUri}
-                phase="success"
-                scanNo={scanNo}
-                headline={
-                  scanNo != null ? formatScanLabel(scanNo, t) : undefined
-                }
-                subtitle={formatDateTime(entry.scannedAt, locale)}
-                minimal
-                ugc
-              />
+              <View style={styles.cardStage}>
+                <PigeonCard
+                  imageUri={entry.imageUri}
+                  scanNo={scanNo}
+                  rarity={rarity}
+                  flavorIndex={flavorIndex}
+                  entryId={entry.id}
+                  size="share"
+                />
+              </View>
             </View>
           </View>
 
           <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-            {scanNo != null ? (
-              <SocialShareButtons
-                shareRef={shareRef}
-                scanNo={scanNo}
-                disabled={shareBusy || deleting}
-                onBusyChange={setSocialBusy}
-              />
-            ) : null}
+            <Text style={styles.rarityBadge}>{getRarityLabel(rarity, t)}</Text>
+
+            <SocialShareButtons
+              shareRef={shareRef}
+              scanNo={scanNo}
+              disabled={shareBusy || deleting}
+              onBusyChange={setSocialBusy}
+            />
 
             <View style={styles.footerRow}>
               <FooterButton
@@ -210,6 +211,9 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     backgroundColor: colors.ink,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingTop: 56,
   },
   backBtn: {
     position: 'absolute',
@@ -227,6 +231,13 @@ const styles = StyleSheet.create({
   },
   shareWrap: {
     flex: 1,
+    justifyContent: 'center',
+  },
+  cardStage: {
+    width: '100%',
+    maxWidth: 340,
+    alignSelf: 'center',
+    aspectRatio: 5 / 7,
   },
   footer: {
     paddingHorizontal: 18,
@@ -236,6 +247,13 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radii.xl,
     borderTopRightRadius: radii.xl,
     ...shadow.floating,
+  },
+  rarityBadge: {
+    alignSelf: 'center',
+    color: colors.accentPurple,
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 2,
   },
   footerRow: {
     flexDirection: 'row',

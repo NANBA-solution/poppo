@@ -7,6 +7,7 @@ import { useI18n } from '@/i18n/I18nProvider';
 import { borders, colors } from '@/theme/tokens';
 import { formatShortDateTime } from '@/utils/formatDate';
 import { formatScanLabel } from '@/utils/scanLabel';
+import { getRarityLabel } from '@/utils/rarityLabel';
 import { getPlayerTitle } from '@/services/titleService';
 import { useCollectionGoal } from '@/hooks/useCollectionGoal';
 import { getDexCompletion } from '@/services/dexService';
@@ -215,9 +216,14 @@ export default function ProfileScreen() {
             >
               <Image source={{ uri: item.imageUri }} style={styles.thumb} />
               <View style={styles.cardBody}>
-                <Text style={styles.cardBreed}>
-                  {formatScanLabel(visibleEntries.length - index, t)}
-                </Text>
+                <View style={styles.cardTitleRow}>
+                  <Text style={styles.cardBreed}>
+                    {formatScanLabel(visibleEntries.length - index, t)}
+                  </Text>
+                  <Text style={styles.cardRarity}>
+                    {getRarityLabel(item.rarity ?? 'N', t)}
+                  </Text>
+                </View>
                 <Text style={styles.cardDate}>
                   {formatShortDateTime(item.scannedAt, locale)}
                 </Text>
@@ -434,10 +440,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 4,
   },
+  cardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
   cardBreed: {
     color: colors.text,
     fontSize: 16,
     fontWeight: '800',
+    flexShrink: 1,
+  },
+  cardRarity: {
+    color: colors.accentPurple,
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1,
   },
   cardDate: {
     color: colors.textMuted,
