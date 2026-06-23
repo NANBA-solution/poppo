@@ -1,2 +1,2 @@
 export { default as PoppoHoloCardView } from './src/PoppoHoloCardView';
-export type { PoppoHoloCardViewProps, HoloCardRarity, HoloCardLayout } from './src/PoppoHoloCard.types';
+export type { PoppoHoloCardViewProps, HoloCardRarity, HoloCardLayout, HoloCardQuality } from './src/PoppoHoloCard.types';

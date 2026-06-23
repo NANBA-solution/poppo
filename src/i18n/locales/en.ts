@@ -38,7 +38,7 @@ export const en: TranslationTree = {
     collectionWatermark: 'POPPO COLLECTION',
     brandTagline: 'Collect every street pigeon.',
     rarityReveal: 'Rare pull: {rarity}',
-    framingHint: 'Pinch and drag to adjust the photo',
+    framingHint: 'Pinch to zoom in/out, drag to position the full photo',
   },
   card: {
     typeLong: 'STREET PIGEON',

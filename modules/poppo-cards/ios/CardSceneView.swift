@@ -2,6 +2,11 @@ import SceneKit
 import SwiftUI
 import UIKit
 
+enum CardQualityKind: Equatable {
+  case full
+  case compact
+}
+
 final class CardSceneController: NSObject, SCNSceneRendererDelegate, UIGestureRecognizerDelegate {
   let scene = SCNScene()
   let scnView: SCNView
@@ -11,20 +16,70 @@ final class CardSceneController: NSObject, SCNSceneRendererDelegate, UIGestureRe
   private var panStartPoint: CGPoint = .zero
   private var motionToken: UUID?
   private var currentLayout: CardLayoutKind?
+  private var renderingActive = false
+  private var quality: CardQualityKind = .full
   private let cameraNode = SCNNode()
+  private var gesturesConfigured = false
 
   init(frame: CGRect) {
     scnView = SCNView(frame: frame)
     super.init()
     configureScene()
-    configureGestures()
-    bindMotion()
   }
 
   deinit {
     if let motionToken {
       MotionManager.shared.removeSubscriber(motionToken)
     }
+  }
+
+  func setRenderingActive(_ active: Bool) {
+    guard renderingActive != active else { return }
+    renderingActive = active
+    scnView.isPlaying = active
+    scnView.rendersContinuously = active
+    if active {
+      bindMotionIfNeeded()
+    } else if let motionToken {
+      MotionManager.shared.removeSubscriber(motionToken)
+      self.motionToken = nil
+      cards.forEach { $0.updateMotion(roll: 0, pitch: 0) }
+    }
+    if !active {
+      scnView.setNeedsDisplay()
+    }
+  }
+
+  func setQuality(_ next: CardQualityKind) {
+    guard quality != next else { return }
+    quality = next
+    applyQualitySettings()
+  }
+
+  private func applyQualitySettings() {
+    switch quality {
+    case .full:
+      scnView.preferredFramesPerSecond = 60
+      scnView.antialiasingMode = .multisampling4X
+      ensureGestures()
+    case .compact:
+      scnView.preferredFramesPerSecond = 1
+      scnView.antialiasingMode = .none
+      removeGestures()
+    }
+    scnView.isPlaying = renderingActive
+    scnView.rendersContinuously = renderingActive
+  }
+
+  private func ensureGestures() {
+    guard !gesturesConfigured else { return }
+    configureGestures()
+    gesturesConfigured = true
+  }
+
+  private func removeGestures() {
+    scnView.gestureRecognizers?.forEach { scnView.removeGestureRecognizer($0) }
+    gesturesConfigured = false
   }
 
   func updateLayout(
@@ -100,7 +155,8 @@ final class CardSceneController: NSObject, SCNSceneRendererDelegate, UIGestureRe
         index: index,
         tiltDegrees: config.tilt,
         offsetY: config.offsetY,
-        zOffset: config.z
+        zOffset: config.z,
+        compactRender: quality == .compact
       )
       card.position = SCNVector3(config.x, Float(config.offsetY) * 0.01, config.z)
       card.basePosition = card.position
@@ -120,11 +176,11 @@ final class CardSceneController: NSObject, SCNSceneRendererDelegate, UIGestureRe
     scnView.scene = scene
     scnView.backgroundColor = .clear
     scnView.isOpaque = false
-    scnView.antialiasingMode = .multisampling4X
     scnView.autoenablesDefaultLighting = false
     scnView.allowsCameraControl = false
     scnView.delegate = self
-    scnView.preferredFramesPerSecond = 60
+    scnView.isPlaying = false
+    scnView.rendersContinuously = false
 
     let cameraNode = self.cameraNode
     let camera = SCNCamera()
@@ -162,7 +218,8 @@ final class CardSceneController: NSObject, SCNSceneRendererDelegate, UIGestureRe
     scnView.addGestureRecognizer(pan)
   }
 
-  private func bindMotion() {
+  private func bindMotionIfNeeded() {
+    guard renderingActive, motionToken == nil else { return }
     motionToken = MotionManager.shared.addSubscriber { [weak self] roll, pitch in
       self?.cards.forEach { $0.updateMotion(roll: roll, pitch: pitch) }
     }
@@ -226,6 +283,7 @@ final class CardSceneController: NSObject, SCNSceneRendererDelegate, UIGestureRe
   }
 
   func renderer(_ renderer: SCNSceneRenderer, updateAtTime time: TimeInterval) {
+    guard renderingActive else { return }
     for card in cards {
       card.uniforms.lightDirection = SIMD3(0.25, 0.85, 1.0)
     }
@@ -240,6 +298,8 @@ enum CardLayoutKind: Equatable {
 struct CardSceneView: UIViewRepresentable {
   var faces: [CardFaceData]
   var layout: CardLayoutKind
+  var isActive: Bool
+  var quality: CardQualityKind
 
   final class Coordinator {
     var controller: CardSceneController?
@@ -252,25 +312,63 @@ struct CardSceneView: UIViewRepresentable {
   func makeUIView(context: Context) -> SCNView {
     let controller = CardSceneController(frame: .zero)
     context.coordinator.controller = controller
+    controller.setQuality(quality)
+    controller.setRenderingActive(isActive)
     controller.updateLayout(faces: faces, layout: layout)
+    if !isActive {
+      controller.scnView.setNeedsDisplay()
+    }
     return controller.scnView
   }
 
   func updateUIView(_ uiView: SCNView, context: Context) {
-    context.coordinator.controller?.updateLayout(faces: faces, layout: layout)
+    guard let controller = context.coordinator.controller else { return }
+    controller.setQuality(quality)
+    controller.setRenderingActive(isActive)
+    controller.updateLayout(faces: faces, layout: layout)
   }
 }
 
 enum CardImageLoader {
-  static func load(from uri: String?, completion: @escaping (UIImage?) -> Void) {
+  private static let cache = NSCache<NSString, UIImage>()
+
+  static func load(
+    from uri: String?,
+    maxPixelSize: CGFloat? = nil,
+    completion: @escaping (UIImage?) -> Void
+  ) {
     guard let uri, !uri.isEmpty else {
       completion(nil)
       return
     }
 
+    let cacheKey = "\(uri)|\(maxPixelSize ?? 0)" as NSString
+    if let cached = cache.object(forKey: cacheKey) {
+      completion(cached)
+      return
+    }
+
     DispatchQueue.global(qos: .userInitiated).async {
-      let image = loadSync(from: uri)
-      DispatchQueue.main.async { completion(image) }
+      guard let image = loadSync(from: uri) else {
+        DispatchQueue.main.async { completion(nil) }
+        return
+      }
+      let output = downscale(image, maxPixelSize: maxPixelSize) ?? image
+      cache.setObject(output, forKey: cacheKey)
+      DispatchQueue.main.async { completion(output) }
+    }
+  }
+
+  private static func downscale(_ image: UIImage, maxPixelSize: CGFloat?) -> UIImage? {
+    guard let maxPixelSize, maxPixelSize > 0 else { return image }
+    let longest = max(image.size.width, image.size.height)
+    guard longest > maxPixelSize else { return image }
+    let scale = maxPixelSize / longest
+    let target = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+    let format = UIGraphicsImageRendererFormat.default()
+    format.scale = 1
+    return UIGraphicsImageRenderer(size: target, format: format).image { _ in
+      image.draw(in: CGRect(origin: .zero, size: target))
     }
   }
 

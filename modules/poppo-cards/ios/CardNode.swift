@@ -11,6 +11,7 @@ final class CardNode: SCNNode {
   private let shadowNode: SCNNode
   private var holoMaterial: SCNMaterial?
   private var pulseActionKey = "legendaryPulse"
+  private let compactRender: Bool
 
   var basePosition = SCNVector3Zero
   var baseEuler = SCNVector3Zero
@@ -39,8 +40,10 @@ final class CardNode: SCNNode {
     index: Int,
     tiltDegrees: Float,
     offsetY: Float,
-    zOffset: Float
+    zOffset: Float,
+    compactRender: Bool = false
   ) {
+    self.compactRender = compactRender
     self.cardIndex = index
     self.rarity = face.rarity
 
@@ -137,7 +140,9 @@ final class CardNode: SCNNode {
 
     applyMaterial(face: face)
     applyRaritySettings(face: face)
-    startGlowPulseIfNeeded()
+    if !compactRender {
+      startGlowPulseIfNeeded()
+    }
   }
 
   @available(*, unavailable)
@@ -238,7 +243,7 @@ final class CardNode: SCNNode {
 
   private func applyMaterial(face: CardFaceData) {
     let material = SCNMaterial()
-    let displayImage = CardFaceRenderer.render(face)
+    let displayImage = CardFaceRenderer.render(face, compact: compactRender)
 
     material.diffuse.contents = displayImage
     material.specular.contents = UIColor.white

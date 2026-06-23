@@ -12,13 +12,20 @@ const RARITY_RANK: Record<CardRarity, number> = {
   SECRET: 4,
 };
 
-const MILESTONE_SCAN_NOS = new Set([
-  1, 7, 13, 42, 69, 77, 88, 100, 108, 404, 500, 666, 777, 888, 999,
-]);
-
-const PITY_THRESHOLD = 45;
 /** ja/en の t.card.flavors[rarity] 件数（各レア 12 件）と揃える */
 const FLAVOR_COUNT = 12;
+
+/**
+ * 基本抽選（unit は 0〜1 の一様乱数）
+ * N 約 97% / R 約 2.5% / SR 約 0.35% / UR 約 0.12% / SECRET 約 0.03%
+ */
+function rollFromUnit(unit: number): CardRarity {
+  if (unit < 0.0003) return 'SECRET';
+  if (unit < 0.0015) return 'UR';
+  if (unit < 0.005) return 'SR';
+  if (unit < 0.03) return 'R';
+  return 'N';
+}
 
 function maxRarity(a: CardRarity, b: CardRarity): CardRarity {
   return RARITY_RANK[a] >= RARITY_RANK[b] ? a : b;
@@ -33,22 +40,6 @@ function seededUnit(seed: string): number {
   return (Math.abs(hash) % 10_000) / 10_000;
 }
 
-function rollFromUnit(unit: number): CardRarity {
-  if (unit < 0.002) return 'SECRET';
-  if (unit < 0.008) return 'UR';
-  if (unit < 0.028) return 'SR';
-  if (unit < 0.10) return 'R';
-  return 'N';
-}
-
-function scanHour(entry: PigeonEntry): number {
-  return new Date(entry.scannedAt).getHours();
-}
-
-function isFriday13th(date: Date): boolean {
-  return date.getDay() === 5 && date.getDate() === 13;
-}
-
 function isLeapDay(date: Date): boolean {
   return date.getMonth() === 1 && date.getDate() === 29;
 }
@@ -57,62 +48,15 @@ function isExactTime(date: Date, hour: number, minute: number): boolean {
   return date.getHours() === hour && date.getMinutes() === minute;
 }
 
-/** スキャン状況から最低保証レア（ランダムの床） */
-export function getRarityFloor(scanNo: number, scannedAt: Date): CardRarity {
-  let floor: CardRarity = 'N';
-
-  if (scanNo === 1) {
-    return 'R';
-  }
-
-  if (MILESTONE_SCAN_NOS.has(scanNo)) {
-    floor = maxRarity(floor, 'R');
-  }
-
-  if (scanNo > 1 && scanNo % 50 === 0) {
-    floor = maxRarity(floor, 'R');
-  }
-
-  const hour = scannedAt.getHours();
-  if (hour === 0) {
-    floor = maxRarity(floor, 'R');
-  } else if (hour >= 22 || hour < 5) {
-    floor = maxRarity(floor, 'R');
-  }
-
-  if (isFriday13th(scannedAt)) {
-    floor = maxRarity(floor, 'R');
-  }
-
+/** イースターエッグのみ最低保証（通常は N 床） */
+export function getRarityFloor(_scanNo: number, scannedAt: Date): CardRarity {
   if (isLeapDay(scannedAt)) {
-    floor = maxRarity(floor, 'SR');
+    return 'SR';
   }
-
   if (isExactTime(scannedAt, 4, 44) || isExactTime(scannedAt, 3, 33)) {
-    floor = maxRarity(floor, 'SECRET');
+    return 'SECRET';
   }
-
-  return floor;
-}
-
-function scansSinceLastHighRarity(entries: PigeonEntry[]): number {
-  for (let i = 0; i < entries.length; i += 1) {
-    const rarity = entries[i]?.rarity;
-    if (rarity && RARITY_RANK[rarity] >= RARITY_RANK.SR) {
-      return i;
-    }
-  }
-  return entries.length;
-}
-
-function applyPityFloor(
-  floor: CardRarity,
-  existingEntries: PigeonEntry[],
-): CardRarity {
-  if (scansSinceLastHighRarity(existingEntries) >= PITY_THRESHOLD) {
-    return maxRarity(floor, 'R');
-  }
-  return floor;
+  return 'N';
 }
 
 function pickFlavorIndex(rarity: CardRarity, seed: string): number {
@@ -126,10 +70,8 @@ export function rollRarityForNewScan(params: {
   scannedAt: Date;
   existingEntries: PigeonEntry[];
 }): { rarity: CardRarity; flavorIndex: number } {
-  const floor = applyPityFloor(
-    getRarityFloor(params.scanNo, params.scannedAt),
-    params.existingEntries,
-  );
+  void params.existingEntries;
+  const floor = getRarityFloor(params.scanNo, params.scannedAt);
   const rolled = rollFromUnit(Math.random());
   const rarity = maxRarity(rolled, floor);
   return {

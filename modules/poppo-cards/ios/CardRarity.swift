@@ -248,22 +248,51 @@ struct CardFaceTheme {
 }
 
 enum CardFaceRenderer {
-  private static let size = CGSize(width: 800, height: 1120)
+  private static let fullSize = CGSize(width: 800, height: 1120)
+  private static let compactSize = CGSize(width: 400, height: 560)
   private static let corner: CGFloat = 32
+  private static let cache = NSCache<NSString, UIImage>()
 
-  static func render(_ data: CardFaceData) -> UIImage {
+  static func render(_ data: CardFaceData, compact: Bool = false) -> UIImage {
+    let key = cacheKey(for: data, compact: compact)
+    if let cached = cache.object(forKey: key) {
+      return cached
+    }
+    let size = compact ? compactSize : fullSize
+    let image = renderUncached(data, size: size)
+    cache.setObject(image, forKey: key)
+    return image
+  }
+
+  private static func cacheKey(for data: CardFaceData, compact: Bool) -> NSString {
+    let photoKey: Int = {
+      guard let photo = data.photo, let cg = photo.cgImage else { return 0 }
+      return cg.width ^ cg.height ^ cg.bitsPerPixel
+    }()
+    let raw =
+      "\(compact)|\(photoKey)|\(data.serial)|\(data.name)|\(data.rarityLabel)|\(data.imageScale)|\(data.imageOffsetX)|\(data.imageOffsetY)"
+    return raw as NSString
+  }
+
+  private static func renderUncached(_ data: CardFaceData, size: CGSize) -> UIImage {
     let theme = CardFaceTheme.theme(for: data)
+    let scale = size.width / fullSize.width
+    let cornerRadius = corner * scale
     let renderer = UIGraphicsImageRenderer(size: size)
     return renderer.image { ctx in
       let bounds = CGRect(origin: .zero, size: size)
-      let path = UIBezierPath(roundedRect: bounds, cornerRadius: corner)
+      let path = UIBezierPath(roundedRect: bounds, cornerRadius: cornerRadius)
       path.addClip()
 
       drawFrame(in: bounds, data: data, theme: theme, context: ctx.cgContext)
-      let inner = bounds.insetBy(dx: 28, dy: 28)
+      let inset = 28 * scale
+      let inner = bounds.insetBy(dx: inset, dy: inset)
       drawInnerFace(data: data, in: inner, theme: theme, context: ctx.cgContext)
     }
   }
+
+  // legacy entry point kept for callers using default size
+  private static var size: CGSize { fullSize }
 
   private static func drawFrame(
     in rect: CGRect,
@@ -542,7 +571,7 @@ enum CardFaceRenderer {
     context.saveGState()
     UIBezierPath(roundedRect: inner, cornerRadius: 8).addClip()
     if let photo {
-      let fitted = aspectFillRect(
+      let fitted = aspectFitRect(
         imageSize: photo.size,
         in: inner,
         scale: CGFloat(imageScale),
@@ -813,7 +842,7 @@ enum CardFaceRenderer {
     )
   }
 
-  private static func aspectFillRect(
+  private static func aspectFitRect(
     imageSize: CGSize,
     in rect: CGRect,
     scale: CGFloat = 1,
@@ -821,8 +850,8 @@ enum CardFaceRenderer {
     offsetY: CGFloat = 0
   ) -> CGRect {
     guard imageSize.width > 0, imageSize.height > 0 else { return rect }
-    let baseScale = max(rect.width / imageSize.width, rect.height / imageSize.height)
-    let applied = baseScale * max(1, scale)
+    let fitScale = min(rect.width / imageSize.width, rect.height / imageSize.height)
+    let applied = fitScale * max(0.35, min(4, scale))
     let w = imageSize.width * applied
     let h = imageSize.height * applied
     let ox = offsetX * rect.width * 0.5

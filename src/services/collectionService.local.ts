@@ -41,9 +41,12 @@ function normalizeCollection(entries: PigeonEntry[]): PigeonEntry[] {
   const sorted = [...entries].sort(
     (a, b) => new Date(b.scannedAt).getTime() - new Date(a.scannedAt).getTime(),
   );
-  return sorted.map((entry, index) =>
-    ensureEntryRarity(entry, sorted.length - index),
-  );
+  return sorted.map((entry, index) => {
+    if (entry.rarity != null && entry.flavorIndex != null) {
+      return entry;
+    }
+    return ensureEntryRarity(entry, sorted.length - index);
+  });
 }
 
 export async function readAllLocal(): Promise<PigeonEntry[]> {

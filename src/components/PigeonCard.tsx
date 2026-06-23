@@ -46,6 +46,7 @@ type PigeonCardProps = {
   framingEditable?: boolean;
   onImageFramingChange?: (framing: CardImageFraming) => void;
   size?: PigeonCardSize;
+  isActive?: boolean;
   style?: StyleProp<ViewStyle>;
   onPress?: () => void;
 };
@@ -372,6 +373,7 @@ export function PigeonCard({
   framingEditable = false,
   onImageFramingChange,
   size = 'grid',
+  isActive = true,
   style,
   onPress,
 }: PigeonCardProps) {
@@ -401,6 +403,7 @@ export function PigeonCard({
 
   const useNativeHolo =
     Platform.OS === 'ios' && isPoppoCardsNativeAvailable() && !framingEditable;
+  const nativeActive = size === 'grid' ? false : isActive;
 
   if (useNativeHolo) {
     const holoCard = (
@@ -411,6 +414,8 @@ export function PigeonCard({
           imageOffsetX={framing.offsetX}
           imageOffsetY={framing.offsetY}
           rarity={toHoloCardRarity(rarity)}
+          quality={size === 'grid' ? 'compact' : 'full'}
+          isActive={nativeActive}
           cardName={name}
           typeLong={t.card.typeLong}
           profile={t.card.profile}

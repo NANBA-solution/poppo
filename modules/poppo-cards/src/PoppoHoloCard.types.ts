@@ -4,6 +4,8 @@ export type HoloCardRarity = 'common' | 'rare' | 'legendary';
 
 export type HoloCardLayout = 'single' | 'trio';
 
+export type HoloCardQuality = 'full' | 'compact';
+
 export type PoppoHoloCardViewProps = {
   imageUri?: string;
   leftImageUri?: string;
@@ -14,6 +16,8 @@ export type PoppoHoloCardViewProps = {
   centerRarity?: HoloCardRarity;
   rightRarity?: HoloCardRarity;
   layout?: HoloCardLayout;
+  quality?: HoloCardQuality;
+  isActive?: boolean;
   cardName?: string;
   typeLong?: string;
   profile?: string;

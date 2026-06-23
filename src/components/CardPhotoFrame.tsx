@@ -1,4 +1,6 @@
 import {
+  clampCardImageFraming,
+  computeCardPhotoLayout,
   DEFAULT_CARD_IMAGE_FRAMING,
   normalizeCardImageFraming,
 } from '@/utils/cardImageFraming';
@@ -43,7 +45,8 @@ export function CardPhotoFrame({
   children,
 }: CardPhotoFrameProps) {
   const normalized = normalizeCardImageFraming(framing);
-  const [size, setSize] = React.useState({ width: 0, height: 0 });
+  const [frameSize, setFrameSize] = React.useState({ width: 0, height: 0 });
+  const [imageSize, setImageSize] = React.useState({ width: 0, height: 0 });
   const framingRef = React.useRef(normalized);
   const panBase = React.useRef({ x: normalized.offsetX, y: normalized.offsetY });
   const pinchBase = React.useRef(normalized.scale);
@@ -54,12 +57,35 @@ export function CardPhotoFrame({
     framingRef.current = normalized;
   }, [normalized]);
 
+  React.useEffect(() => {
+    let active = true;
+    Image.getSize(
+      uri,
+      (width, height) => {
+        if (active) setImageSize({ width, height });
+      },
+      () => {
+        if (active) setImageSize({ width: 0, height: 0 });
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [uri]);
+
   const emitFraming = React.useCallback(
     (next: CardImageFraming) => {
-      framingRef.current = next;
-      onFramingChange?.(next);
+      const clamped =
+        frameSize.width > 0 &&
+        frameSize.height > 0 &&
+        imageSize.width > 0 &&
+        imageSize.height > 0
+          ? clampCardImageFraming(next, frameSize.width, frameSize.height, imageSize.width, imageSize.height)
+          : normalizeCardImageFraming(next);
+      framingRef.current = clamped;
+      onFramingChange?.(clamped);
     },
-    [onFramingChange],
+    [frameSize.height, frameSize.width, imageSize.height, imageSize.width, onFramingChange],
   );
 
   const handleGrant = React.useCallback((event: GestureResponderEvent) => {
@@ -77,57 +103,60 @@ export function CardPhotoFrame({
 
   const handleMove = React.useCallback(
     (event: GestureResponderEvent) => {
-      const { width, height } = size;
+      const { width, height } = frameSize;
       if (width <= 0 || height <= 0) return;
 
       const touches = event.nativeEvent.touches;
       if (touches.length >= 2 && pinchStartDistance.current > 0) {
         const distance = touchDistance(touches[0], touches[1]);
-        emitFraming(
-          normalizeCardImageFraming({
-            ...framingRef.current,
-            scale: pinchBase.current * (distance / pinchStartDistance.current),
-          }),
-        );
+        emitFraming({
+          ...framingRef.current,
+          scale: pinchBase.current * (distance / pinchStartDistance.current),
+        });
         return;
       }
 
       if (touches.length === 1) {
         const dx = touches[0].pageX - panStart.current.x;
         const dy = touches[0].pageY - panStart.current.y;
-        emitFraming(
-          normalizeCardImageFraming({
-            ...framingRef.current,
-            offsetX: panBase.current.x + (dx / width) * 2,
-            offsetY: panBase.current.y + (dy / height) * 2,
-          }),
-        );
+        emitFraming({
+          ...framingRef.current,
+          offsetX: panBase.current.x + (dx / width) * 2,
+          offsetY: panBase.current.y + (dy / height) * 2,
+        });
       }
     },
-    [emitFraming, size],
+    [emitFraming, frameSize],
   );
 
   const photoStyle = React.useMemo<ImageStyle>(() => {
-    if (size.width <= 0 || size.height <= 0) {
+    const { width: frameWidth, height: frameHeight } = frameSize;
+    const { width: imageWidth, height: imageHeight } = imageSize;
+    if (frameWidth <= 0 || frameHeight <= 0 || imageWidth <= 0 || imageHeight <= 0) {
       return StyleSheet.absoluteFillObject;
     }
-    const width = size.width * normalized.scale;
-    const height = size.height * normalized.scale;
+    const layout = computeCardPhotoLayout(
+      frameWidth,
+      frameHeight,
+      imageWidth,
+      imageHeight,
+      normalized,
+    );
     return {
       position: 'absolute',
-      width,
-      height,
-      left: (size.width - width) / 2 + normalized.offsetX * size.width * 0.5,
-      top: (size.height - height) / 2 + normalized.offsetY * size.height * 0.5,
+      width: layout.width,
+      height: layout.height,
+      left: layout.left,
+      top: layout.top,
     };
-  }, [normalized, size.height, size.width]);
+  }, [frameSize, imageSize, normalized]);
 
   return (
     <View
       style={[styles.clip, style]}
       onLayout={(event) => {
         const { width, height } = event.nativeEvent.layout;
-        setSize({ width, height });
+        setFrameSize({ width, height });
       }}
       {...(editable
         ? {
@@ -142,7 +171,7 @@ export function CardPhotoFrame({
       <Image
         source={{ uri }}
         style={[photoStyle, imageStyle]}
-        resizeMode="cover"
+        resizeMode="stretch"
         accessibilityLabel={accessibilityLabel}
       />
       {children ? (

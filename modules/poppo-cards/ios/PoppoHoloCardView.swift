@@ -6,6 +6,7 @@ final class PoppoHoloCardView: ExpoView {
   private let hosting: UIHostingController<ContentView>
   private var pendingRefresh = false
   private var refreshQueued = false
+  private var currentFaces: [CardFaceData] = []
 
   var layoutName = "single"
   var rarityName = "common"
@@ -50,12 +51,16 @@ final class PoppoHoloCardView: ExpoView {
   var showStats = true
   var showCosts = true
   var showBrand = true
+  var isActive = true
+  var qualityName = "full"
 
   required init(appContext: AppContext? = nil) {
     hosting = UIHostingController(
       rootView: ContentView(
         faces: [],
-        layout: .single
+        layout: .single,
+        isActive: true,
+        quality: .full
       )
     )
     super.init(appContext: appContext)
@@ -69,6 +74,21 @@ final class PoppoHoloCardView: ExpoView {
     hosting.view.frame = bounds
   }
 
+  func setActive(_ active: Bool) {
+    guard isActive != active else { return }
+    isActive = active
+    updateRuntimeState()
+  }
+
+  func updateRuntimeState() {
+    hosting.rootView = ContentView(
+      faces: currentFaces,
+      layout: layoutKind,
+      isActive: isActive,
+      quality: qualityKind
+    )
+  }
+
   func refreshContent() {
     if pendingRefresh {
       refreshQueued = true
@@ -79,6 +99,7 @@ final class PoppoHoloCardView: ExpoView {
     let layout = layoutKind
     let uris: [String?]
     let rarities: [CardRarity]
+    let maxPixelSize: CGFloat? = qualityKind == .compact ? 256 : nil
 
     switch layout {
     case .single:
@@ -98,7 +119,7 @@ final class PoppoHoloCardView: ExpoView {
 
     for (index, uri) in uris.enumerated() {
       group.enter()
-      CardImageLoader.load(from: uri) { image in
+      CardImageLoader.load(from: uri, maxPixelSize: maxPixelSize) { image in
         photos[index] = image
         group.leave()
       }
@@ -120,7 +141,13 @@ final class PoppoHoloCardView: ExpoView {
         }
       }
 
-      self.hosting.rootView = ContentView(faces: faces, layout: layout)
+      self.currentFaces = faces
+      self.hosting.rootView = ContentView(
+        faces: faces,
+        layout: layout,
+        isActive: self.isActive,
+        quality: self.qualityKind
+      )
 
       if self.refreshQueued {
         self.refreshQueued = false
@@ -131,6 +158,10 @@ final class PoppoHoloCardView: ExpoView {
 
   private var layoutKind: CardLayoutKind {
     layoutName == "trio" ? .trio : .single
+  }
+
+  private var qualityKind: CardQualityKind {
+    qualityName == "compact" ? .compact : .full
   }
 
   private func makeFace(photo: UIImage?, rarity: CardRarity, useDefaults: Bool = false) -> CardFaceData {

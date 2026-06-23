@@ -18,7 +18,11 @@ final class MotionManager {
     let id = UUID()
     listeners[id] = handler
     subscriberCount = listeners.count
-    startIfNeeded()
+    if motionManager.isDeviceMotionActive {
+      motionManager.deviceMotionUpdateInterval = subscriberCount > 4 ? 1.0 / 30.0 : 1.0 / 60.0
+    } else {
+      startIfNeeded()
+    }
     handler(roll, pitch)
     return id
   }
@@ -28,6 +32,8 @@ final class MotionManager {
     subscriberCount = listeners.count
     if subscriberCount == 0 {
       stop()
+    } else if motionManager.isDeviceMotionActive {
+      motionManager.deviceMotionUpdateInterval = subscriberCount > 4 ? 1.0 / 30.0 : 1.0 / 60.0
     }
   }
 
@@ -41,7 +47,7 @@ final class MotionManager {
     guard subscriberCount > 0, !motionManager.isDeviceMotionActive else { return }
     guard motionManager.isDeviceMotionAvailable else { return }
 
-    motionManager.deviceMotionUpdateInterval = 1.0 / 60.0
+    motionManager.deviceMotionUpdateInterval = subscriberCount > 4 ? 1.0 / 30.0 : 1.0 / 60.0
     motionManager.startDeviceMotionUpdates(using: .xArbitraryCorrectedZVertical, to: .main) { [weak self] motion, _ in
       guard let self, let motion else { return }
       self.roll = Float(motion.attitude.roll)

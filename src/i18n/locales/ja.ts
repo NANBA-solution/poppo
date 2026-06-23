@@ -36,7 +36,7 @@ export const ja = {
     collectionWatermark: 'POPPO COLLECTION',
     brandTagline: '街のハト、全部コレる。',
     rarityReveal: 'レア出現: {rarity}',
-    framingHint: 'ピンチ・ドラッグで写真の位置を調整',
+    framingHint: 'ピンチで拡大・縮小、ドラッグで写真全体の位置を調整',
   },
   card: {
     typeLong: '路上ハト',

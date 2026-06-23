@@ -171,6 +171,15 @@ public class PoppoCardsModule: Module {
         view.showBrand = show
       }
 
+      Prop("isActive") { (view: PoppoHoloCardView, active: Bool) in
+        view.setActive(active)
+      }
+
+      Prop("quality") { (view: PoppoHoloCardView, quality: String) in
+        view.qualityName = quality
+        view.refreshContent()
+      }
+
       OnViewDidUpdateProps { view in
         view.refreshContent()
       }

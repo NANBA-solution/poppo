@@ -3,7 +3,7 @@ export const CARD_RARITIES = ['N', 'R', 'SR', 'UR', 'SECRET'] as const;
 export type CardRarity = (typeof CARD_RARITIES)[number];
 
 export type CardImageFraming = {
-  /** 1 = 標準のトリミング、最大 3 まで拡大 */
+  /** 1 = 写真全体が枠に収まる。小さくすると余白、大きくすると拡大 */
   scale: number;
   /** 横方向のずらし（-1〜1） */
   offsetX: number;
