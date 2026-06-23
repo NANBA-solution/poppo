@@ -50,6 +50,7 @@ module.exports = {
     plugins: [
       ...(require('./app.json').expo.plugins ?? []),
       './plugins/withXcode26FmtFix.js',
+      './plugins/withXcodeEmbeddedBundle.js',
       [
         'expo-build-properties',
         {
@@ -68,7 +69,15 @@ module.exports = {
           color: '#F5F1EA',
         },
       ],
-      ...(isCIRelease ? [] : ['expo-dev-client']),
+      ...(isCIRelease ? [] : [
+        [
+          'expo-dev-client',
+          {
+            launchMode: 'launcher',
+            ios: { launchMode: 'launcher' },
+          },
+        ],
+      ]),
       [
         'expo-media-library',
         {

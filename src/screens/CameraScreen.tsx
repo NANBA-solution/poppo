@@ -19,7 +19,14 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import {
+  PinchGestureHandler,
+  State,
+  TapGestureHandler,
+  type PinchGestureHandlerGestureEvent,
+  type PinchGestureHandlerStateChangeEvent,
+  type TapGestureHandlerStateChangeEvent,
+} from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type FocusPoint = { x: number; y: number };
@@ -98,33 +105,29 @@ export default function CameraScreen() {
     focusTimer.current = setTimeout(() => setFocusPoint(null), 900);
   }, []);
 
-  const pinchGesture = React.useMemo(
-    () =>
-      Gesture.Pinch()
-        .onBegin(() => {
-          zoomBase.current = zoomRef.current;
-        })
-        .onUpdate((e) => {
-          const next = Math.min(1, Math.max(0, zoomBase.current + (e.scale - 1) * 0.35));
-          setZoom(next);
-        })
-        .onEnd(() => {
-          zoomBase.current = zoomRef.current;
-        }),
-    [],
-  );
+  const pinchRef = React.useRef<PinchGestureHandler>(null);
+  const tapRef = React.useRef<TapGestureHandler>(null);
 
-  const tapGesture = React.useMemo(
-    () =>
-      Gesture.Tap().onEnd((e) => {
-        showFocusRing(e.x, e.y);
-      }),
+  const onPinchGestureEvent = React.useCallback((event: PinchGestureHandlerGestureEvent) => {
+    if (event.nativeEvent.state !== State.ACTIVE) return;
+    const next = Math.min(1, Math.max(0, zoomBase.current + (event.nativeEvent.scale - 1) * 0.35));
+    setZoom(next);
+  }, []);
+
+  const onPinchStateChange = React.useCallback((event: PinchGestureHandlerStateChangeEvent) => {
+    if (event.nativeEvent.state === State.BEGAN) {
+      zoomBase.current = zoomRef.current;
+    } else if (event.nativeEvent.oldState === State.ACTIVE) {
+      zoomBase.current = zoomRef.current;
+    }
+  }, []);
+
+  const onTapStateChange = React.useCallback(
+    (event: TapGestureHandlerStateChangeEvent) => {
+      if (event.nativeEvent.state !== State.END) return;
+      showFocusRing(event.nativeEvent.x, event.nativeEvent.y);
+    },
     [showFocusRing],
-  );
-
-  const cameraGestures = React.useMemo(
-    () => Gesture.Simultaneous(pinchGesture, tapGesture),
-    [pinchGesture, tapGesture],
   );
 
   const cycleFlash = React.useCallback(() => {
@@ -293,9 +296,20 @@ export default function CameraScreen() {
           onCameraReady={markCameraReady}
           onMountError={(e) => Alert.alert(t.camera.mountError, e.message)}
         />
-        <GestureDetector gesture={cameraGestures}>
-          <View style={styles.gestureLayer} />
-        </GestureDetector>
+        <TapGestureHandler
+          ref={tapRef}
+          simultaneousHandlers={pinchRef}
+          onHandlerStateChange={onTapStateChange}
+        >
+          <PinchGestureHandler
+            ref={pinchRef}
+            simultaneousHandlers={tapRef}
+            onGestureEvent={onPinchGestureEvent}
+            onHandlerStateChange={onPinchStateChange}
+          >
+            <View style={styles.gestureLayer} />
+          </PinchGestureHandler>
+        </TapGestureHandler>
         {focusPoint ? (
           <View
             pointerEvents="none"
