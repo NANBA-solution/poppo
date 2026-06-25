@@ -22,7 +22,7 @@ export function getRarityRevealMessage(
   t: TranslationTree,
 ): string | null {
   if (rarity === 'N' || rarity === 'R') return null;
-  return formatMessage(t.card.reveal, { rarity: getRarityLabel(rarity, t) });
+  return formatMessage(t.scan.rarityReveal, { rarity: getRarityLabel(rarity, t) });
 }
 
 export function getCardStats(

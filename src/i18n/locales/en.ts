@@ -39,6 +39,13 @@ export const en: TranslationTree = {
     brandTagline: 'Collect every street pigeon.',
     rarityReveal: 'Rare pull: {rarity}',
     framingHint: 'Pinch to zoom in/out, drag to position the full photo',
+    framingGuideTitle: 'Adjust the photo in the frame',
+    framingGuidePinch: '↔️ Pinch with two fingers to zoom',
+    framingGuideDrag: '👆 Drag to reposition',
+    framingGuideTry: 'Try it on the card photo',
+    framingGuideDismiss: 'OK',
+    discardTitle: 'Remove this scan',
+    discardBody: 'Delete from your collection and return to the camera.',
   },
   card: {
     typeLong: 'STREET PIGEON',
@@ -141,6 +148,7 @@ export const en: TranslationTree = {
   },
   share: {
     instagram: 'Instagram Story',
+    instagramShort: 'Story',
     xPost: 'Post',
     xA11y: 'Post on X',
     shareFailed: 'Could not share.',
@@ -168,6 +176,10 @@ export const en: TranslationTree = {
     simulatorHint:
       'The camera preview is not available in the simulator. Use a physical device, or pick a photo below.',
     simulatorPick: 'Choose photo',
+    nativeMissingTitle: 'Camera unavailable',
+    nativeMissingBody:
+      'This dev build does not include expo-camera. Rebuild the development client.',
+    nativeMissingHint: 'npm run build:dev:ios',
   },
   settings: {
     title: 'Settings',

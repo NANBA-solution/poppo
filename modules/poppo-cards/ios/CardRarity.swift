@@ -283,12 +283,13 @@ enum CardFaceRenderer {
       return cg.width ^ cg.height ^ cg.bitsPerPixel
     }()
     let raw =
-      "v6|\(compact)|\(photoKey)|\(data.serial)|\(data.name)|\(data.rarityLabel)|\(data.imageScale)|\(data.imageOffsetX)|\(data.imageOffsetY)"
+      "v8|\(compact)|\(photoKey)|\(data.serial)|\(data.name)|\(data.rarityLabel)|\(data.imageScale)|\(data.imageOffsetX)|\(data.imageOffsetY)"
     return raw as NSString
   }
 
   private static func renderUncached(_ data: CardFaceData, size: CGSize) -> UIImage {
     let theme = CardFaceTheme.theme(for: data)
+    let foilSubdued = size.width <= compactSize.width + 0.5
     let scale = size.width / fullSize.width
     let cornerRadius = corner * scale
     let format = UIGraphicsImageRendererFormat()
@@ -303,7 +304,7 @@ enum CardFaceRenderer {
       let path = UIBezierPath(roundedRect: bounds, cornerRadius: cornerRadius)
       path.addClip()
 
-      drawFrame(in: bounds, data: data, theme: theme, scale: scale, context: ctx.cgContext)
+      drawFrame(in: bounds, data: data, theme: theme, scale: scale, foilSubdued: foilSubdued, context: ctx.cgContext)
       let inset = frameWidth * scale
       let overlap = innerSealOverlap * scale
       let inner = bounds.insetBy(dx: inset - overlap, dy: inset - overlap)
@@ -311,6 +312,7 @@ enum CardFaceRenderer {
         data: data,
         in: inner,
         theme: theme,
+        foilSubdued: foilSubdued,
         context: ctx.cgContext
       )
     }
@@ -327,6 +329,7 @@ enum CardFaceRenderer {
     data: CardFaceData,
     theme: CardFaceTheme,
     scale: CGFloat,
+    foilSubdued: Bool = false,
     context: CGContext
   ) {
     let frameInset = frameWidth * scale
@@ -365,6 +368,7 @@ enum CardFaceRenderer {
       label: label,
       theme: theme,
       scale: scale,
+      foilSubdued: foilSubdued,
       context: context
     )
   }
@@ -394,8 +398,10 @@ enum CardFaceRenderer {
     label: String,
     theme: CardFaceTheme,
     scale: CGFloat,
+    foilSubdued: Bool = false,
     context: CGContext
   ) {
+    let sheen = foilSubdued ? 0.78 : 1.0
     let space = CGColorSpaceCreateDeviceRGB()
     let stops = metallicStops(for: label, theme: theme)
 
@@ -424,7 +430,7 @@ enum CardFaceRenderer {
       if let cross = CGGradient(
         colorsSpace: space,
         colors: [
-          UIColor.white.withAlphaComponent(0.42).cgColor,
+          UIColor.white.withAlphaComponent(0.42 * sheen).cgColor,
           theme.frameTop.withAlphaComponent(0.08).cgColor,
           UIColor.black.withAlphaComponent(0.22).cgColor,
         ] as CFArray,
@@ -495,9 +501,9 @@ enum CardFaceRenderer {
         )
       }
 
-      drawLameFlakes(in: outer, label: label, context: ctx)
+      drawLameFlakes(in: outer, label: label, intensity: sheen, context: ctx)
 
-      if let specular = CGGradient(
+      if !foilSubdued, let specular = CGGradient(
         colorsSpace: space,
         colors: [
           UIColor.white.withAlphaComponent(0.72).cgColor,
@@ -613,7 +619,12 @@ enum CardFaceRenderer {
     }
   }
 
-  private static func drawLameFlakes(in rect: CGRect, label: String, context: CGContext) {
+  private static func drawLameFlakes(
+    in rect: CGRect,
+    label: String,
+    intensity: CGFloat = 1.0,
+    context: CGContext
+  ) {
     let density: Int
     switch label.uppercased() {
     case "SECRET": density = 220
@@ -624,8 +635,9 @@ enum CardFaceRenderer {
     }
     guard density > 0 else { return }
 
+    let scaledDensity = max(1, Int(CGFloat(density) * intensity))
     let seed = label.hashValue
-    for i in 0..<density {
+    for i in 0..<scaledDensity {
       let unitX = CGFloat((seed &+ i &* 73) % 10_000) / 10_000.0
       let unitY = CGFloat((seed &+ i &* 131) % 10_000) / 10_000.0
       let unitA = CGFloat((seed &+ i &* 197) % 10_000) / 10_000.0
@@ -636,7 +648,7 @@ enum CardFaceRenderer {
       let angle = unitA * .pi * 2
       let width = 2.5 + unitS * 9.5
       let height = 0.7 + unitB * 2.4
-      let alpha = 0.14 + unitS * 0.38
+      let alpha = (0.14 + unitS * 0.38) * intensity
 
       context.saveGState()
       context.translateBy(x: x, y: y)
@@ -660,6 +672,7 @@ enum CardFaceRenderer {
     data: CardFaceData,
     in rect: CGRect,
     theme: CardFaceTheme,
+    foilSubdued: Bool = false,
     context: CGContext
   ) {
     let layoutScale = rect.width / referenceInnerWidth
@@ -673,6 +686,7 @@ enum CardFaceRenderer {
       in: local,
       theme: theme,
       frameInnerRadius: frameInnerR,
+      foilSubdued: foilSubdued,
       context: context
     )
     context.restoreGState()
@@ -696,8 +710,10 @@ enum CardFaceRenderer {
     in rect: CGRect,
     theme: CardFaceTheme,
     frameInnerRadius: CGFloat,
+    foilSubdued: Bool = false,
     context: CGContext
   ) {
+    let foilIntensity: CGFloat = foilSubdued ? 0.78 : 1.0
     let label = data.rarityLabel.uppercased()
     let isPremium = label == "SR" || label == "UR" || label == "SECRET" || label == "R"
 
@@ -759,7 +775,7 @@ enum CardFaceRenderer {
     if label != "N" {
       context.saveGState()
       UIBezierPath(roundedRect: face, cornerRadius: max(0, faceR)).addClip()
-      drawLameFlakes(in: face, label: data.rarityLabel, context: context)
+      drawLameFlakes(in: face, label: data.rarityLabel, intensity: foilIntensity, context: context)
       context.restoreGState()
     }
 
@@ -795,6 +811,7 @@ enum CardFaceRenderer {
       imageScale: data.imageScale,
       imageOffsetX: data.imageOffsetX,
       imageOffsetY: data.imageOffsetY,
+      foilIntensity: foilIntensity,
       context: context
     )
     cursorY = artRect.maxY + 12
@@ -901,6 +918,7 @@ enum CardFaceRenderer {
     imageScale: Float,
     imageOffsetX: Float,
     imageOffsetY: Float,
+    foilIntensity: CGFloat = 1.0,
     context: CGContext
   ) {
     let recess = rect.insetBy(dx: 0, dy: 0)
@@ -931,34 +949,66 @@ enum CardFaceRenderer {
     line.stroke()
 
     if rarityLabel.uppercased() != "N" {
-      drawLameFlakes(in: inner, label: rarityLabel, context: context)
+      drawLameFlakes(in: inner, label: rarityLabel, intensity: foilIntensity, context: context)
     }
   }
 
-  private static func drawNameBar(name: String, in rect: CGRect, theme: CardFaceTheme) {
-    let context = UIGraphicsGetCurrentContext()
-    context?.saveGState()
-    let colors = [theme.plateTop.cgColor, theme.plateBottom.cgColor] as CFArray
-    let space = CGColorSpaceCreateDeviceRGB()
-    if let gradient = CGGradient(colorsSpace: space, colors: colors, locations: [0, 1]) {
-      let path = UIBezierPath(roundedRect: rect, cornerRadius: 8)
-      path.addClip()
-      context?.drawLinearGradient(
-        gradient,
-        start: CGPoint(x: rect.minX, y: rect.minY),
-        end: CGPoint(x: rect.minX, y: rect.maxY),
-        options: []
-      )
+  private static func cardNameFont(size: CGFloat) -> UIFont {
+    for name in ["ZenMaruGothic-Bold", "ZenMaruGothic_700Bold"] {
+      if let font = UIFont(name: name, size: size) {
+        return font
+      }
     }
-    context?.restoreGState()
+    let base = UIFont.systemFont(ofSize: size, weight: .bold)
+    if let rounded = base.fontDescriptor.withDesign(.rounded) {
+      return UIFont(descriptor: rounded, size: size)
+    }
+    return base
+  }
 
-    theme.accent.setStroke()
-    UIBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), cornerRadius: 8).lineWidth = 2.5
-    UIBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), cornerRadius: 8).stroke()
+  private static func drawNameBar(name: String, in rect: CGRect, theme: CardFaceTheme) {
+    let plate = CGRect(x: rect.minX, y: rect.minY + 3, width: rect.width, height: rect.height - 6)
+    theme.paperTop.withAlphaComponent(0.78).setFill()
+    UIBezierPath(rect: plate).fill()
+
+    let ruleColor = theme.accent.withAlphaComponent(0.34)
+    ruleColor.setStroke()
+    let topRule = UIBezierPath()
+    topRule.move(to: CGPoint(x: plate.minX + 10, y: plate.minY + 0.5))
+    topRule.addLine(to: CGPoint(x: plate.maxX - 10, y: plate.minY + 0.5))
+    topRule.lineWidth = 1
+    topRule.stroke()
+
+    let bottomRule = UIBezierPath()
+    bottomRule.move(to: CGPoint(x: plate.minX + 10, y: plate.maxY - 0.5))
+    bottomRule.addLine(to: CGPoint(x: plate.maxX - 10, y: plate.maxY - 0.5))
+    bottomRule.lineWidth = 1
+    bottomRule.stroke()
+
+    let tickW: CGFloat = 2
+    let tickH: CGFloat = 10
+    theme.accent.withAlphaComponent(0.42).setFill()
+    UIBezierPath(
+      rect: CGRect(
+        x: plate.minX + 6,
+        y: plate.midY - tickH / 2,
+        width: tickW,
+        height: tickH
+      )
+    ).fill()
+    UIBezierPath(
+      rect: CGRect(
+        x: plate.maxX - 6 - tickW,
+        y: plate.midY - tickH / 2,
+        width: tickW,
+        height: tickH
+      )
+    ).fill()
+
     drawText(
       name,
-      in: rect,
-      font: .systemFont(ofSize: 34, weight: .black),
+      in: plate,
+      font: cardNameFont(size: 30),
       color: theme.ink,
       align: .center
     )

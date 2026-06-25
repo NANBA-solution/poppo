@@ -3,7 +3,10 @@ import 'react-native-gesture-handler';
 import { DailyNotificationBootstrap } from '@/components/DailyNotificationBootstrap';
 import { LaunchScreen } from '@/components/ui/LaunchScreen';
 import { I18nProvider } from '@/i18n/I18nProvider';
+import { CARD_NAME_FONT_FAMILY } from '@/theme/cardFonts';
 import { colors } from '@/theme/tokens';
+import { ZenMaruGothic_700Bold } from '@expo-google-fonts/zen-maru-gothic';
+import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -15,13 +18,18 @@ SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 function RootNavigator() {
   const [booting, setBooting] = React.useState(true);
+  const [fontsLoaded, fontError] = useFonts({
+    [CARD_NAME_FONT_FAMILY]: ZenMaruGothic_700Bold,
+  });
 
   React.useEffect(() => {
-    setBooting(false);
-    void SplashScreen.hideAsync();
-  }, []);
+    if (fontsLoaded || fontError) {
+      setBooting(false);
+      void SplashScreen.hideAsync();
+    }
+  }, [fontError, fontsLoaded]);
 
-  if (booting) {
+  if (booting || (!fontsLoaded && !fontError)) {
     return <LaunchScreen />;
   }
 

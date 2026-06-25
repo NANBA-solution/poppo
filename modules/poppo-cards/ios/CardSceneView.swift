@@ -19,6 +19,8 @@ final class CardSceneController: NSObject, SCNSceneRendererDelegate, UIGestureRe
   private var renderingActive = false
   private var quality: CardQualityKind = .full
   private let cameraNode = SCNNode()
+  private let omniNode = SCNNode()
+  private let fillNode = SCNNode()
   private var gesturesConfigured = false
 
   init(frame: CGRect) {
@@ -61,10 +63,14 @@ final class CardSceneController: NSObject, SCNSceneRendererDelegate, UIGestureRe
     case .full:
       scnView.preferredFramesPerSecond = 60
       scnView.antialiasingMode = .multisampling4X
+      omniNode.light?.intensity = 1200
+      fillNode.light?.intensity = 260
       ensureGestures()
     case .compact:
       scnView.preferredFramesPerSecond = 1
       scnView.antialiasingMode = .none
+      omniNode.light?.intensity = 900
+      fillNode.light?.intensity = 220
       removeGestures()
     }
     scnView.isPlaying = renderingActive
@@ -191,7 +197,7 @@ final class CardSceneController: NSObject, SCNSceneRendererDelegate, UIGestureRe
     cameraNode.position = SCNVector3(0, 0.05, 8.2)
     scene.rootNode.addChildNode(cameraNode)
 
-    let omni = SCNNode()
+    let omni = omniNode
     let light = SCNLight()
     light.type = .omni
     light.intensity = 1200
@@ -200,13 +206,13 @@ final class CardSceneController: NSObject, SCNSceneRendererDelegate, UIGestureRe
     omni.position = SCNVector3(0.4, 1.8, 7.2)
     scene.rootNode.addChildNode(omni)
 
-    let fillNode = SCNNode()
+    let fill = fillNode
     let fillLight = SCNLight()
     fillLight.type = .ambient
     fillLight.intensity = 260
     fillLight.color = UIColor(white: 0.95, alpha: 1)
-    fillNode.light = fillLight
-    scene.rootNode.addChildNode(fillNode)
+    fill.light = fillLight
+    scene.rootNode.addChildNode(fill)
   }
 
   private func configureGestures() {

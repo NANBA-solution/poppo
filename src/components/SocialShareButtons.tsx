@@ -14,12 +14,14 @@ import {
   type View as ViewType,
 } from 'react-native';
 
+type SocialShareLayout = 'icons' | 'tiles';
+
 type SocialShareButtonsProps = {
   shareRef: React.RefObject<ViewType | null>;
   scanNo: number;
   disabled?: boolean;
   onBusyChange?: (busy: boolean) => void;
-  compact?: boolean;
+  layout?: SocialShareLayout;
 };
 
 export function SocialShareButtons({
@@ -27,7 +29,7 @@ export function SocialShareButtons({
   scanNo,
   disabled = false,
   onBusyChange,
-  compact = false,
+  layout = 'icons',
 }: SocialShareButtonsProps) {
   const { t, locale } = useI18n();
   const [busy, setBusy] = React.useState<'instagram' | 'x' | null>(null);
@@ -62,29 +64,77 @@ export function SocialShareButtons({
 
   const isDisabled = disabled || busy !== null;
 
+  if (layout === 'tiles') {
+    return (
+      <View style={styles.tileRow}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t.share.instagram}
+          disabled={isDisabled}
+          onPress={() => runShare('instagram')}
+          style={({ pressed }) => [
+            styles.tileBtn,
+            styles.instagramTile,
+            pressed && styles.pressed,
+            isDisabled && styles.disabled,
+          ]}
+        >
+          {busy === 'instagram' ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <AppIcon name="instagram" size={22} color="#fff" />
+              <Text style={styles.tileLabel}>{t.share.instagram}</Text>
+            </>
+          )}
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t.share.xA11y}
+          disabled={isDisabled}
+          onPress={() => runShare('x')}
+          style={({ pressed }) => [
+            styles.tileBtn,
+            styles.xTile,
+            pressed && styles.pressed,
+            isDisabled && styles.disabled,
+          ]}
+        >
+          {busy === 'x' ? (
+            <ActivityIndicator color={colors.ink} />
+          ) : (
+            <>
+              <AppIcon name="x-logo" size={20} color={colors.ink} />
+              <Text style={[styles.tileLabel, styles.xTileLabel]}>{t.share.xPost}</Text>
+            </>
+          )}
+        </Pressable>
+      </View>
+    );
+  }
+
   return (
-    <View style={styles.row}>
+    <View style={styles.iconRow}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={t.share.instagram}
         disabled={isDisabled}
         onPress={() => runShare('instagram')}
         style={({ pressed }) => [
-          styles.btn,
-          compact ? styles.btnCompact : styles.btnTall,
-          styles.instagramBtn,
+          styles.iconChip,
           pressed && styles.pressed,
           isDisabled && styles.disabled,
         ]}
       >
         {busy === 'instagram' ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={colors.ink} size="small" />
         ) : (
           <>
-            <AppIcon name="instagram" size={compact ? 20 : 22} color="#fff" />
-            <Text style={[styles.btnLabel, compact && styles.btnLabelCompact]}>
-              {t.share.instagram}
-            </Text>
+            <View style={[styles.iconCircle, styles.instagramCircle]}>
+              <AppIcon name="instagram" size={18} color="#fff" />
+            </View>
+            <Text style={styles.iconChipLabel}>{t.share.instagramShort}</Text>
           </>
         )}
       </Pressable>
@@ -95,21 +145,19 @@ export function SocialShareButtons({
         disabled={isDisabled}
         onPress={() => runShare('x')}
         style={({ pressed }) => [
-          styles.btn,
-          compact ? styles.btnCompact : styles.btnTall,
-          styles.xBtn,
+          styles.iconChip,
           pressed && styles.pressed,
           isDisabled && styles.disabled,
         ]}
       >
         {busy === 'x' ? (
-          <ActivityIndicator color={colors.ink} />
+          <ActivityIndicator color={colors.ink} size="small" />
         ) : (
           <>
-            <AppIcon name="x-logo" size={compact ? 18 : 20} color={colors.ink} />
-            <Text style={[styles.btnLabel, styles.xBtnLabel, compact && styles.btnLabelCompact]}>
-              {t.share.xPost}
-            </Text>
+            <View style={[styles.iconCircle, styles.xCircle]}>
+              <AppIcon name="x-logo" size={16} color={colors.ink} />
+            </View>
+            <Text style={styles.iconChipLabel}>{t.share.xPost}</Text>
           </>
         )}
       </Pressable>
@@ -118,54 +166,79 @@ export function SocialShareButtons({
 }
 
 const styles = StyleSheet.create({
-  row: {
+  iconRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  iconChip: {
+    minWidth: 108,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: radii.md,
+    borderWidth: borders.thin,
+    borderColor: colors.border,
+    backgroundColor: colors.bgElevated,
+    alignItems: 'center',
+    gap: 6,
+  },
+  iconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  instagramCircle: {
+    backgroundColor: '#D63378',
+  },
+  xCircle: {
+    backgroundColor: colors.surfaceSolid,
+    borderWidth: borders.thin,
+    borderColor: colors.borderStrong,
+  },
+  iconChipLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
+  tileRow: {
     flexDirection: 'row',
     gap: 10,
   },
-  btn: {
+  tileBtn: {
     flex: 1,
-    borderRadius: radii.pill,
-    flexDirection: 'row',
+    minHeight: 64,
+    borderRadius: radii.md,
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 14,
-    gap: 8,
-  },
-  btnTall: {
-    minHeight: 64,
     paddingVertical: 10,
-    flexDirection: 'column',
     gap: 6,
-    borderRadius: radii.md,
   },
-  btnCompact: {
-    minHeight: 48,
-    paddingVertical: 12,
-  },
-  instagramBtn: {
+  instagramTile: {
     backgroundColor: '#E1306C',
   },
-  xBtn: {
+  xTile: {
     backgroundColor: colors.surfaceSolid,
     borderWidth: borders.medium,
     borderColor: colors.borderStrong,
   },
-  btnLabel: {
+  tileLabel: {
     color: '#fff',
     fontSize: 12,
     fontWeight: '800',
     textAlign: 'center',
     lineHeight: 16,
   },
-  btnLabelCompact: {
-    fontSize: 14,
-    lineHeight: 18,
-  },
-  xBtnLabel: {
+  xTileLabel: {
     color: colors.ink,
   },
   pressed: {
     opacity: 0.9,
+    transform: [{ scale: 0.98 }],
   },
   disabled: {
     opacity: 0.45,

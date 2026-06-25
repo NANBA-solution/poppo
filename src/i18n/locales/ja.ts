@@ -37,6 +37,13 @@ export const ja = {
     brandTagline: '街のハト、全部コレる。',
     rarityReveal: 'レア出現: {rarity}',
     framingHint: 'ピンチで拡大・縮小、ドラッグで写真全体の位置を調整',
+    framingGuideTitle: '写真の位置を調整できます',
+    framingGuidePinch: '↔️ 2本指でピンチ → 拡大・縮小',
+    framingGuideDrag: '👆 ドラッグ → 位置を移動',
+    framingGuideTry: 'カードの写真に触れて試してみてください',
+    framingGuideDismiss: 'OK',
+    discardTitle: 'このスキャンを削除',
+    discardBody: 'コレクションから削除して、撮影画面に戻ります。',
   },
   card: {
     typeLong: '路上ハト',
@@ -139,6 +146,7 @@ export const ja = {
   },
   share: {
     instagram: 'Instagram ストーリー',
+    instagramShort: 'ストーリー',
     xPost: 'にポスト',
     xA11y: 'Xにポスト',
     shareFailed: '共有に失敗しました。',
@@ -165,6 +173,10 @@ export const ja = {
     shutter: 'シャッター',
     simulatorHint: 'シミュレータではカメラプレビューは使えません。実機で撮影するか、下のボタンで写真を選んでください。',
     simulatorPick: '写真を選ぶ',
+    nativeMissingTitle: 'カメラを起動できません',
+    nativeMissingBody:
+      'この開発ビルドにカメラ（expo-camera）が含まれていません。開発用ビルドを作り直してください。',
+    nativeMissingHint: 'npm run build:dev:ios',
   },
   settings: {
     title: '設定',

@@ -1,12 +1,14 @@
 import { PigeonCard } from '@/components/PigeonCard';
+import { ScanFramingGuide } from '@/components/ScanFramingGuide';
 import { ShareCaptureFrame } from '@/components/ShareCaptureFrame';
 import { SocialShareButtons } from '@/components/SocialShareButtons';
-import { ActionFooter, FooterButton } from '@/components/ui/ActionFooter';
+import { ActionFooter, FooterButton, FooterTextAction } from '@/components/ui/ActionFooter';
 import { Screen } from '@/components/ui/Screen';
 import { formatMessage } from '@/i18n/format';
 import { formatScanLabel } from '@/utils/scanLabel';
 import { useI18n } from '@/i18n/I18nProvider';
 import {
+  deletePigeonScan,
   getPigeonCollection,
   getPigeonCount,
   savePigeonScan,
@@ -17,6 +19,10 @@ import { notifyGoalReached } from '@/services/collectionGoalNotificationService'
 import { notifyQuestsCompleted } from '@/services/questNotificationService';
 import { detectNewQuests, getQuestTitle } from '@/services/questService';
 import { recognizePigeonLocally } from '@/services/pigeonDetectService';
+import {
+  completeScanFramingGuide,
+  shouldShowScanFramingGuide,
+} from '@/services/scanFramingGuideService';
 import { isNotPigeonError } from '@/types/scan';
 import type { CardImageFraming, CardRarity } from '@/types/collection';
 import { colors } from '@/theme/tokens';
@@ -33,7 +39,6 @@ import { useLocalSearchParams } from 'expo-router';
 import * as React from 'react';
 import {
   Alert,
-  Pressable,
   StyleSheet,
   Text,
   View,
@@ -79,6 +84,13 @@ export default function ResultScreen() {
     DEFAULT_CARD_IMAGE_FRAMING,
   );
   const framingSaveTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [framingGuideVisible, setFramingGuideVisible] = React.useState(false);
+  const [discarding, setDiscarding] = React.useState(false);
+
+  const dismissFramingGuide = React.useCallback(() => {
+    setFramingGuideVisible(false);
+    void completeScanFramingGuide();
+  }, []);
 
   React.useEffect(() => {
     preloadQuestComplete();
@@ -100,6 +112,7 @@ export default function ResultScreen() {
       setScanNo(null);
       setNewQuestTitles([]);
       setImageFraming(DEFAULT_CARD_IMAGE_FRAMING);
+      setFramingGuideVisible(false);
       return;
     }
 
@@ -136,6 +149,9 @@ export default function ResultScreen() {
           setImageFraming(normalizeCardImageFraming(entry.imageFraming));
           setNewQuestTitles(questTitles);
           setPhase('success');
+          void shouldShowScanFramingGuide().then((show) => {
+            if (!cancelled && show) setFramingGuideVisible(true);
+          });
           void hapticSuccess();
           if (newQuestIds.length > 0) {
             void playQuestComplete();
@@ -186,18 +202,57 @@ export default function ResultScreen() {
   const handleImageFramingChange = React.useCallback(
     (next: CardImageFraming) => {
       setImageFraming(next);
+      if (framingGuideVisible) {
+        dismissFramingGuide();
+      }
       if (!savedEntryId) return;
       if (framingSaveTimer.current) clearTimeout(framingSaveTimer.current);
       framingSaveTimer.current = setTimeout(() => {
         void updatePigeonImageFraming(savedEntryId, next);
       }, 280);
     },
-    [savedEntryId],
+    [dismissFramingGuide, framingGuideVisible, savedEntryId],
   );
 
   const handleRetry = React.useCallback(() => {
     setRetryKey((k) => k + 1);
   }, []);
+
+  const handleDiscard = React.useCallback(() => {
+    if (!savedEntryId || discarding) return;
+
+    Alert.alert(t.scan.discardTitle, t.scan.discardBody, [
+      { text: t.common.cancel, style: 'cancel' },
+      {
+        text: t.common.delete,
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            setDiscarding(true);
+            await deletePigeonScan(savedEntryId);
+            router.back();
+          } catch (e) {
+            Alert.alert(
+              t.common.error,
+              e instanceof Error ? e.message : t.entry.deleteError,
+            );
+          } finally {
+            setDiscarding(false);
+          }
+        },
+      },
+    ]);
+  }, [
+    discarding,
+    router,
+    savedEntryId,
+    t.common.cancel,
+    t.common.delete,
+    t.common.error,
+    t.entry.deleteError,
+    t.scan.discardBody,
+    t.scan.discardTitle,
+  ]);
 
   const handleShare = React.useCallback(async () => {
     if (!shareRef.current || !displayUri || shareBusy || phase !== 'success') return;
@@ -242,6 +297,9 @@ export default function ResultScreen() {
                   onImageFramingChange={handleImageFramingChange}
                   size="share"
                 />
+                {framingGuideVisible ? (
+                  <ScanFramingGuide onDismiss={dismissFramingGuide} />
+                ) : null}
               </View>
             ) : (
               <ShareCaptureFrame
@@ -266,68 +324,93 @@ export default function ResultScreen() {
         )}
       </View>
 
+      {(phase === 'success' || phase === 'error') && (
       <ActionFooter>
-        {phase === 'success' && rarityReveal ? (
-          <View style={styles.rarityBanner}>
-            <Text style={styles.rarityBannerText}>{rarityReveal}</Text>
-          </View>
-        ) : null}
         {phase === 'success' ? (
-          <Text style={styles.framingHint}>{t.scan.framingHint}</Text>
-        ) : null}
-        {phase === 'success' && newQuestTitles.length > 0 && (
-          <View style={styles.questBanner}>
-            {newQuestTitles.map((title) => (
-              <Text key={title} style={styles.questBannerText}>
-                {formatMessage(t.scan.quest, { title })}
-              </Text>
-            ))}
-          </View>
-        )}
-        {phase === 'success' && savedEntryId && (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() =>
-              router.push({ pathname: '/entry/[id]', params: { id: savedEntryId } })
-            }
-            style={({ pressed }) => [styles.savedLink, pressed && styles.pressed]}
-          >
-            <Text style={styles.savedLinkText}>
-              {t.scan.saved} · {t.scan.savedAction}
-            </Text>
-          </Pressable>
-        )}
-        {phase === 'success' && scanNo != null ? (
-          <SocialShareButtons
-            shareRef={shareRef}
-            scanNo={scanNo}
-            disabled={!displayUri || shareBusy}
-            onBusyChange={setSocialBusy}
-          />
-        ) : null}
-        <View style={styles.footerRow}>
-          {phase === 'success' ? (
+          <>
+            <View style={styles.statusBlock}>
+              {rarityReveal ? (
+                <Text style={styles.statusTitle}>{rarityReveal}</Text>
+              ) : null}
+              <Text style={styles.statusSubtitle}>{t.scan.saved}</Text>
+              {newQuestTitles.length > 0 ? (
+                <View style={styles.questList}>
+                  {newQuestTitles.map((title) => (
+                    <Text key={title} style={styles.questLine}>
+                      {formatMessage(t.scan.quest, { title })}
+                    </Text>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+
+            {scanNo != null ? (
+              <SocialShareButtons
+                shareRef={shareRef}
+                scanNo={scanNo}
+                disabled={!displayUri || shareBusy || discarding}
+                onBusyChange={setSocialBusy}
+                layout="icons"
+              />
+            ) : null}
+
             <FooterButton
               label={t.common.share}
               onPress={handleShare}
-              disabled={!displayUri || shareBusy || socialBusy}
+              disabled={!displayUri || shareBusy || socialBusy || discarding}
               loading={shareBusy}
             />
-          ) : null}
-          {phase === 'error' && !notPigeon ? (
+
+            <View style={styles.footerRow}>
+              {savedEntryId ? (
+                <FooterButton
+                  label={t.scan.savedAction}
+                  variant="secondary"
+                  onPress={() =>
+                    router.push({ pathname: '/entry/[id]', params: { id: savedEntryId } })
+                  }
+                  disabled={discarding || shareBusy}
+                />
+              ) : null}
+              <FooterButton
+                label={t.scan.retake}
+                variant="ghost"
+                onPress={() => router.back()}
+                disabled={discarding || shareBusy}
+              />
+            </View>
+
+            {savedEntryId ? (
+              <FooterTextAction
+                label={t.common.delete}
+                tone="danger"
+                onPress={handleDiscard}
+                disabled={shareBusy || socialBusy}
+                loading={discarding}
+              />
+            ) : null}
+
+            <Text style={styles.framingHint}>{t.scan.framingHint}</Text>
+          </>
+        ) : null}
+        {phase === 'error' ? (
+          <View style={styles.footerRow}>
+            {!notPigeon ? (
+              <FooterButton
+                label={t.scan.retryRecognize}
+                variant="secondary"
+                onPress={handleRetry}
+              />
+            ) : null}
             <FooterButton
-              label={t.scan.retryRecognize}
-              variant="secondary"
-              onPress={handleRetry}
+              label={t.scan.retake}
+              variant={notPigeon ? 'primary' : 'ghost'}
+              onPress={() => router.back()}
             />
-          ) : null}
-          <FooterButton
-            label={t.scan.retake}
-            variant={phase === 'error' ? 'secondary' : 'ghost'}
-            onPress={() => router.back()}
-          />
-        </View>
+          </View>
+        ) : null}
       </ActionFooter>
+      )}
     </Screen>
   );
 }
@@ -348,6 +431,7 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
     aspectRatio: 5 / 7,
+    position: 'relative',
   },
   missing: {
     flex: 1,
@@ -356,54 +440,45 @@ const styles = StyleSheet.create({
     fontSize: 16,
     padding: 24,
   },
-  questBanner: {
+  statusBlock: {
+    alignItems: 'center',
     gap: 4,
-    paddingVertical: 6,
-    paddingHorizontal: 4,
+    paddingHorizontal: 8,
   },
-  questBannerText: {
-    color: colors.accent,
-    fontSize: 13,
+  statusTitle: {
+    color: colors.ink,
+    fontSize: 17,
     fontWeight: '800',
     textAlign: 'center',
+    letterSpacing: -0.2,
   },
-  rarityBanner: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 14,
-    backgroundColor: 'rgba(107,91,149,0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(107,91,149,0.22)',
-  },
-  rarityBannerText: {
-    color: colors.accentPurple,
-    fontSize: 15,
-    fontWeight: '900',
+  statusSubtitle: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '600',
     textAlign: 'center',
-    letterSpacing: 0.8,
+  },
+  questList: {
+    marginTop: 4,
+    gap: 2,
+    alignItems: 'center',
+  },
+  questLine: {
+    color: colors.success,
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   framingHint: {
     color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '500',
     textAlign: 'center',
     paddingHorizontal: 12,
-    paddingBottom: 4,
-  },
-  savedLink: {
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  savedLinkText: {
-    color: colors.accent,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  pressed: {
-    opacity: 0.85,
+    lineHeight: 16,
   },
   footerRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
 });

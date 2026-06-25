@@ -242,12 +242,20 @@ final class CardNode: SCNNode {
     let displayImage = CardFaceRenderer.render(face, compact: compactRender)
 
     material.diffuse.contents = displayImage
-    material.specular.contents = UIColor.white
-    material.shininess = 0.9
-    material.lightingModel = .phong
     material.isDoubleSided = false
     material.transparency = 1
     material.transparencyMode = .default
+
+    if compactRender {
+      material.lightingModel = .constant
+      cardPlane.geometry?.materials = [material]
+      holoMaterial = material
+      return
+    }
+
+    material.specular.contents = UIColor.white
+    material.shininess = 0.9
+    material.lightingModel = .phong
 
     if let device = MTLCreateSystemDefaultDevice(),
        let library = try? device.makeDefaultLibrary(bundle: Bundle(for: CardNode.self)) {
@@ -273,11 +281,13 @@ final class CardNode: SCNNode {
   }
 
   private func applyRaritySettings(face: CardFaceData) {
+    guard !compactRender else { return }
     let theme = CardFaceTheme.theme(for: face)
     uniforms.holoIntensity = theme.holoIntensity
     uniforms.baseTint = theme.holoTint
     uniforms.fresnelPower = rarity.fresnelPower
     uniforms.shininess = 0.9
+    holoMaterial?.shininess = 0.9
     uniforms.cornerRadius = Float(CardDimensions.cornerRadius / CardDimensions.height)
   }
 }

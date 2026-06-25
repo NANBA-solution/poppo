@@ -1,7 +1,7 @@
 import { AppIcon } from '@/components/icons/AppIcon';
 import { PigeonCard } from '@/components/PigeonCard';
 import { SocialShareButtons } from '@/components/SocialShareButtons';
-import { FooterButton } from '@/components/ui/ActionFooter';
+import { ActionFooter, FooterButton, FooterTextAction } from '@/components/ui/ActionFooter';
 import { useI18n } from '@/i18n/I18nProvider';
 import {
   deletePigeonScan,
@@ -159,33 +159,35 @@ export default function EntryDetailScreen() {
             </View>
           </View>
 
-          <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-            <Text style={styles.rarityBadge}>{getRarityLabel(rarity, t)}</Text>
+          <ActionFooter style={styles.footerSheet}>
+            <View style={styles.statusBlock}>
+              <Text style={styles.statusTitle}>{getRarityLabel(rarity, t)}</Text>
+              <Text style={styles.statusSubtitle}>{t.entry.title}</Text>
+            </View>
 
             <SocialShareButtons
               shareRef={shareRef}
               scanNo={scanNo}
               disabled={shareBusy || deleting}
               onBusyChange={setSocialBusy}
+              layout="icons"
             />
 
-            <View style={styles.footerRow}>
-              <FooterButton
-                label={t.common.share}
-                onPress={handleShare}
-                disabled={shareBusy || socialBusy || deleting}
-                loading={shareBusy}
-              />
-              <FooterButton
-                label={t.common.delete}
-                variant="danger"
-                flex={0}
-                onPress={handleDelete}
-                disabled={deleting || shareBusy}
-                loading={deleting}
-              />
-            </View>
-          </View>
+            <FooterButton
+              label={t.common.share}
+              onPress={handleShare}
+              disabled={shareBusy || socialBusy || deleting}
+              loading={shareBusy}
+            />
+
+            <FooterTextAction
+              label={t.common.delete}
+              tone="danger"
+              onPress={handleDelete}
+              disabled={shareBusy || socialBusy}
+              loading={deleting}
+            />
+          </ActionFooter>
         </>
       )}
     </View>
@@ -240,26 +242,26 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     aspectRatio: 5 / 7,
   },
-  footer: {
-    paddingHorizontal: 18,
-    paddingTop: 16,
-    gap: 12,
-    backgroundColor: colors.paper,
-    borderTopLeftRadius: radii.xl,
-    borderTopRightRadius: radii.xl,
-    ...shadow.floating,
+  footerSheet: {
+    borderTopWidth: 0,
   },
-  rarityBadge: {
-    alignSelf: 'center',
-    color: colors.accentPurple,
-    fontSize: 13,
-    fontWeight: '900',
-    letterSpacing: 2,
-  },
-  footerRow: {
-    flexDirection: 'row',
-    gap: 10,
+  statusBlock: {
     alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+  },
+  statusTitle: {
+    color: colors.ink,
+    fontSize: 17,
+    fontWeight: '800',
+    textAlign: 'center',
+    letterSpacing: 1.2,
+  },
+  statusSubtitle: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   pressed: {
     opacity: 0.88,

@@ -22,6 +22,10 @@ function getNativeView(): React.ComponentType<PoppoHoloCardViewProps> | null {
   return nativeView ?? null;
 }
 
+export function isPoppoHoloCardViewAvailable(): boolean {
+  return getNativeView() != null;
+}
+
 export default function PoppoHoloCardView({
   layout = 'single',
   rarity = 'common',

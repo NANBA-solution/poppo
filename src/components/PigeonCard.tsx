@@ -1,5 +1,6 @@
 import { CardPhotoFrame } from '@/components/CardPhotoFrame';
 import { useI18n } from '@/i18n/I18nProvider';
+import { CARD_NAME_FONT_FAMILY } from '@/theme/cardFonts';
 import { colors } from '@/theme/tokens';
 import type { CardImageFraming, CardRarity } from '@/types/collection';
 import {
@@ -21,7 +22,7 @@ import {
   getRarityLabel,
 } from '@/utils/rarityLabel';
 import { LinearGradient } from 'expo-linear-gradient';
-import { PoppoHoloCardView } from 'poppo-cards';
+import { PoppoHoloCardView, isPoppoHoloCardViewAvailable } from 'poppo-cards';
 import * as React from 'react';
 import {
   Platform,
@@ -207,7 +208,7 @@ const LAYOUT = {
   },
 } as const;
 
-function HoloBands({ bands }: { bands: RarityFinish['holoBands'] }) {
+function HoloBands({ bands, muted = false }: { bands: RarityFinish['holoBands']; muted?: boolean }) {
   if (bands.length === 0) return null;
   return (
     <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
@@ -217,7 +218,7 @@ function HoloBands({ bands }: { bands: RarityFinish['holoBands'] }) {
           colors={colors}
           start={{ x: 0, y: i * 0.3 }}
           end={{ x: 1, y: 0.7 + i * 0.2 }}
-          style={[StyleSheet.absoluteFillObject, { opacity: 0.68 + i * 0.1 }]}
+          style={[StyleSheet.absoluteFillObject, { opacity: (muted ? 0.48 : 0.68) + i * (muted ? 0.06 : 0.1) }]}
         />
       ))}
     </View>
@@ -228,16 +229,18 @@ function LameFlakes({
   seed,
   accent,
   rarity,
+  muted = false,
 }: {
   seed: number;
   accent: string;
   rarity: CardRarity;
+  muted?: boolean;
 }) {
   const count =
-    rarity === 'SECRET' ? 52
-    : rarity === 'UR' ? 46
-    : rarity === 'SR' ? 40
-    : rarity === 'R' ? 34
+    rarity === 'SECRET' ? (muted ? 24 : 52)
+    : rarity === 'UR' ? (muted ? 22 : 46)
+    : rarity === 'SR' ? (muted ? 20 : 40)
+    : rarity === 'R' ? (muted ? 18 : 34)
     : 0;
   if (count === 0) return null;
 
@@ -254,11 +257,11 @@ function LameFlakes({
           rx: 0.7 + (u3 % 9) * 0.28,
           ry: 0.14 + (u4 % 6) * 0.07,
           angle: u3 % 360,
-          opacity: 0.38 + (u4 % 10) * 0.045,
+          opacity: (muted ? 0.24 : 0.38) + (u4 % 10) * (muted ? 0.03 : 0.045),
           color: i % 5 === 0 ? '#FFFFFF' : i % 3 === 0 ? '#FFF6D8' : accent,
         };
       }),
-    [accent, count, seed],
+    [accent, count, muted, seed],
   );
 
   return (
@@ -402,8 +405,12 @@ export function PigeonCard({
       : `file://${imageUri}`;
 
   const useNativeHolo =
-    Platform.OS === 'ios' && isPoppoCardsNativeAvailable() && !framingEditable;
+    Platform.OS === 'ios' &&
+    isPoppoCardsNativeAvailable() &&
+    isPoppoHoloCardViewAvailable() &&
+    !framingEditable;
   const nativeActive = size === 'grid' ? false : isActive;
+  const gridMuted = size === 'grid';
 
   if (useNativeHolo) {
     const holoCard = (
@@ -480,7 +487,7 @@ export function PigeonCard({
             colors={['rgba(255,255,255,0.45)', 'rgba(0,0,0,0.55)']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={styles.frameSpecular}
+            style={[styles.frameSpecular, gridMuted && styles.frameSpecularGrid]}
             pointerEvents="none"
           />
 
@@ -544,17 +551,22 @@ export function PigeonCard({
                       accessibilityLabel={name}
                       style={styles.artPhotoClip}
                     >
-                      {hasHolo ? <HoloBands bands={finish.holoBands} /> : null}
-                      {hasHolo ? <HoloLines accent={finish.accentBright} id={holoId} /> : null}
+                      {hasHolo ? <HoloBands bands={finish.holoBands} muted={gridMuted} /> : null}
+                      {hasHolo && !gridMuted ? <HoloLines accent={finish.accentBright} id={holoId} /> : null}
                       {hasHolo ? (
                         <LameFlakes
                           seed={scanNo + flavorIndex * 17}
                           accent={finish.accentBright}
                           rarity={rarity}
+                          muted={gridMuted}
                         />
                       ) : null}
                       <LinearGradient
-                        colors={['rgba(255,255,255,0.2)', 'transparent', 'rgba(0,0,0,0.15)']}
+                        colors={
+                          gridMuted
+                            ? ['rgba(255,255,255,0.14)', 'transparent', 'rgba(0,0,0,0.1)']
+                            : ['rgba(255,255,255,0.2)', 'transparent', 'rgba(0,0,0,0.15)']
+                        }
                         locations={[0, 0.4, 1]}
                         style={StyleSheet.absoluteFillObject}
                         pointerEvents="none"
@@ -564,23 +576,33 @@ export function PigeonCard({
                 </View>
               </View>
 
-              <LinearGradient
-                colors={finish.plate}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={[
-                  styles.nameBar,
-                  {
-                    borderColor: finish.accent,
-                    borderTopColor: finish.dark ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.8)',
-                    borderBottomColor: finish.dark ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.2)',
-                  },
-                ]}
-              >
-                <Text style={[styles.cardName, { color: finish.ink, fontSize: layout.name }]} numberOfLines={1}>
-                  {name}
-                </Text>
-              </LinearGradient>
+              <View style={styles.nameBanner}>
+                <View style={[styles.nameRule, { backgroundColor: finish.accent }]} />
+                <View
+                  style={[
+                    styles.namePlate,
+                    {
+                      backgroundColor: finish.dark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.72)',
+                    },
+                  ]}
+                >
+                  <View style={[styles.nameTick, { backgroundColor: finish.accent }]} />
+                  <Text
+                    style={[
+                      styles.cardName,
+                      {
+                        color: finish.ink,
+                        fontSize: layout.name + 0.5,
+                      },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {name}
+                  </Text>
+                  <View style={[styles.nameTick, { backgroundColor: finish.accent }]} />
+                </View>
+                <View style={[styles.nameRule, { backgroundColor: finish.accent }]} />
+              </View>
 
               {layout.showProfile ? (
                 <Text
@@ -656,7 +678,7 @@ export function PigeonCard({
                 ) : null}
               </View>
 
-              {hasHolo && !framingEditable ? (
+              {hasHolo && !framingEditable && !gridMuted ? (
                 <LinearGradient
                   colors={['rgba(255,255,255,0.22)', 'transparent', 'rgba(255,255,255,0.1)']}
                   start={{ x: 0, y: 0 }}
@@ -666,12 +688,16 @@ export function PigeonCard({
                 />
               ) : null}
 
-              {hasHolo && !framingEditable ? (
+              {hasHolo && !framingEditable && !gridMuted ? (
                 <LameFlakes seed={scanNo * 3 + flavorIndex} accent={finish.accentBright} rarity={rarity} />
               ) : null}
 
               <LinearGradient
-                colors={['rgba(255,255,255,0.28)', 'transparent', 'transparent']}
+                colors={
+                  gridMuted
+                    ? ['rgba(255,255,255,0.16)', 'transparent', 'transparent']
+                    : ['rgba(255,255,255,0.28)', 'transparent', 'transparent']
+                }
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0.5, y: 0.45 }}
                 style={styles.laminate}
@@ -737,6 +763,9 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     opacity: 0.35,
   },
+  frameSpecularGrid: {
+    opacity: 0.24,
+  },
   frameInset: {
     flex: 1,
     borderRadius: 10,
@@ -800,13 +829,33 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 4,
   },
-  nameBar: {
-    borderRadius: 4,
-    borderWidth: 1.5,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    alignItems: 'center',
+  nameBanner: {
+    gap: 2,
     zIndex: 2,
+  },
+  nameRule: {
+    alignSelf: 'center',
+    width: '88%',
+    height: StyleSheet.hairlineWidth * 2,
+    opacity: 0.34,
+  },
+  namePlate: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderTopWidth: StyleSheet.hairlineWidth * 2,
+    borderBottomWidth: StyleSheet.hairlineWidth * 2,
+    borderTopColor: 'rgba(0,0,0,0.08)',
+    borderBottomColor: 'rgba(0,0,0,0.08)',
+  },
+  nameTick: {
+    width: 2,
+    height: 8,
+    opacity: 0.42,
+    borderRadius: 1,
   },
   rarityGem: {
     borderWidth: 1,
@@ -820,9 +869,14 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
   },
   cardName: {
-    fontWeight: '900',
-    letterSpacing: -0.3,
+    flex: 1,
+    fontFamily: CARD_NAME_FONT_FAMILY,
+    fontWeight: '700',
+    letterSpacing: 0.6,
     textAlign: 'center',
+    textShadowColor: 'rgba(255,255,255,0.55)',
+    textShadowOffset: { width: 0, height: 0.5 },
+    textShadowRadius: 0,
   },
   profileLine: {
     textAlign: 'center',

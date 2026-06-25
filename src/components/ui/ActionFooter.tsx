@@ -13,14 +13,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 type ActionFooterProps = {
   children: React.ReactNode;
   style?: ViewStyle;
+  variant?: 'flat' | 'sheet';
 };
 
-export function ActionFooter({ children, style }: ActionFooterProps) {
+export function ActionFooter({ children, style, variant = 'sheet' }: ActionFooterProps) {
   const insets = useSafeAreaInsets();
   return (
     <View
       style={[
         styles.footer,
+        variant === 'sheet' && styles.footerSheet,
         { paddingBottom: Math.max(insets.bottom, 16) },
         style,
       ]}
@@ -90,21 +92,65 @@ export function FooterButton({
   );
 }
 
+type FooterTextActionProps = {
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+  loading?: boolean;
+  tone?: 'muted' | 'danger';
+  accessibilityLabel?: string;
+};
+
+export function FooterTextAction({
+  label,
+  onPress,
+  disabled,
+  loading,
+  tone = 'muted',
+  accessibilityLabel,
+}: FooterTextActionProps) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
+      disabled={disabled || loading}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.textAction,
+        pressed && styles.pressed,
+        (disabled || loading) && styles.disabled,
+      ]}
+    >
+      {loading ? (
+        <ActivityIndicator color={tone === 'danger' ? colors.danger : colors.textMuted} />
+      ) : (
+        <Text style={tone === 'danger' ? styles.textActionDanger : styles.textActionMuted}>
+          {label}
+        </Text>
+      )}
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   footer: {
     paddingHorizontal: 20,
-    paddingTop: 14,
+    paddingTop: 16,
+    backgroundColor: colors.surfaceSolid,
+    gap: 12,
+  },
+  footerSheet: {
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
     borderTopWidth: borders.thin,
     borderTopColor: colors.border,
-    backgroundColor: colors.surfaceSolid,
-    gap: 10,
-    ...shadow.subtle,
+    ...shadow.floating,
   },
   btn: {
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderRadius: radii.pill,
     alignItems: 'center',
-    minHeight: 52,
+    minHeight: 50,
     justifyContent: 'center',
     borderWidth: borders.thin,
   },
@@ -148,4 +194,20 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
   disabled: { opacity: 0.45 },
+  textAction: {
+    alignSelf: 'center',
+    minHeight: 36,
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+  },
+  textActionMuted: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  textActionDanger: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.danger,
+  },
 });
