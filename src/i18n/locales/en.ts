@@ -46,6 +46,8 @@ export const en: TranslationTree = {
     framingGuideDismiss: 'OK',
     discardTitle: 'Remove this scan',
     discardBody: 'Delete from your collection and return to the camera.',
+    editFraming: 'Adjust photo',
+    editFramingDone: 'Done adjusting',
   },
   card: {
     typeLong: 'STREET PIGEON',

@@ -44,6 +44,8 @@ export const ja = {
     framingGuideDismiss: 'OK',
     discardTitle: 'このスキャンを削除',
     discardBody: 'コレクションから削除して、撮影画面に戻ります。',
+    editFraming: '写真を調整',
+    editFramingDone: '調整を終了',
   },
   card: {
     typeLong: '路上ハト',

@@ -33,7 +33,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import Svg, { Defs, Ellipse, G, Line, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
+import Svg, { Ellipse, G, Line } from 'react-native-svg';
 
 type PigeonCardSize = 'grid' | 'detail' | 'share';
 
@@ -282,33 +282,6 @@ function LameFlakes({
   );
 }
 
-function HoloLines({ accent, id }: { accent: string; id: string }) {
-  return (
-    <Svg style={StyleSheet.absoluteFillObject} pointerEvents="none">
-      <Defs>
-        <SvgGradient id={id} x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0%" stopColor="transparent" />
-          <Stop offset="45%" stopColor={accent} stopOpacity={0.35} />
-          <Stop offset="55%" stopColor="#FFFFFF" stopOpacity={0.2} />
-          <Stop offset="100%" stopColor="transparent" />
-        </SvgGradient>
-      </Defs>
-      {Array.from({ length: 20 }, (_, i) => (
-        <Line
-          key={i}
-          x1={`${-20 + i * 12}%`}
-          y1="0%"
-          x2={`${30 + i * 12}%`}
-          y2="100%"
-          stroke={`url(#${id})`}
-          strokeWidth={1.2}
-          opacity={0.72}
-        />
-      ))}
-    </Svg>
-  );
-}
-
 function PaperGrain({ dark }: { dark?: boolean }) {
   return (
     <Svg style={StyleSheet.absoluteFillObject} pointerEvents="none" opacity={dark ? 0.12 : 0.06}>
@@ -396,7 +369,6 @@ export function PigeonCard({
   const dmg2 = getCardAttackDamage(rarity, scanNo, 2);
   const showSecondMoveDesc =
     layout.showMove2Desc && move2.desc.length > 0 && move2.desc !== move1.desc;
-  const holoId = `holo-${entryId ?? scanNo}`;
   const hasHolo = finish.holoBands.length > 0;
   const framing = normalizeCardImageFraming(imageFraming);
   const nativeImageUri =
@@ -552,7 +524,6 @@ export function PigeonCard({
                       style={styles.artPhotoClip}
                     >
                       {hasHolo ? <HoloBands bands={finish.holoBands} muted={gridMuted} /> : null}
-                      {hasHolo && !gridMuted ? <HoloLines accent={finish.accentBright} id={holoId} /> : null}
                       {hasHolo ? (
                         <LameFlakes
                           seed={scanNo + flavorIndex * 17}

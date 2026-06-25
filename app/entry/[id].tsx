@@ -8,9 +8,11 @@ import {
   getPigeonById,
   getPigeonCollection,
   getScanNumber,
+  updatePigeonImageFraming,
 } from '@/services/collectionService';
-import type { PigeonEntry } from '@/types/collection';
+import type { CardImageFraming, PigeonEntry } from '@/types/collection';
 import { borders, colors, radii, shadow } from '@/theme/tokens';
+import { normalizeCardImageFraming } from '@/utils/cardImageFraming';
 import { getRarityLabel } from '@/utils/rarityLabel';
 import { sharePigeonImageWithFallback } from '@/utils/sharePigeon';
 import { useTabRouter } from '@/hooks/useTabRouter';
@@ -41,6 +43,23 @@ export default function EntryDetailScreen() {
   const [shareBusy, setShareBusy] = React.useState(false);
   const [socialBusy, setSocialBusy] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
+  const [framingEditMode, setFramingEditMode] = React.useState(false);
+  const [imageFraming, setImageFraming] = React.useState<CardImageFraming>(
+    normalizeCardImageFraming(null),
+  );
+  const framingSaveTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (framingSaveTimer.current) clearTimeout(framingSaveTimer.current);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (entry) {
+      setImageFraming(normalizeCardImageFraming(entry.imageFraming));
+    }
+  }, [entry?.id, entry?.imageFraming]);
 
   React.useEffect(() => {
     if (!entryId) {
@@ -68,6 +87,20 @@ export default function EntryDetailScreen() {
       active = false;
     };
   }, [entryId]);
+
+  const handleImageFramingChange = React.useCallback(
+    (next: CardImageFraming) => {
+      setImageFraming(next);
+      if (!entry) return;
+      if (framingSaveTimer.current) clearTimeout(framingSaveTimer.current);
+      framingSaveTimer.current = setTimeout(() => {
+        void updatePigeonImageFraming(entry.id, next).then((updated) => {
+          if (updated) setEntry(updated);
+        });
+      }, 280);
+    },
+    [entry],
+  );
 
   const handleShare = React.useCallback(async () => {
     if (!shareRef.current || !entry || scanNo == null || shareBusy) return;
@@ -152,8 +185,11 @@ export default function EntryDetailScreen() {
                   rarity={rarity}
                   flavorIndex={flavorIndex}
                   entryId={entry.id}
-                  imageFraming={entry.imageFraming}
+                  imageFraming={imageFraming}
+                  framingEditable={framingEditMode}
+                  onImageFramingChange={handleImageFramingChange}
                   size="share"
+                  isActive={!framingEditMode}
                 />
               </View>
             </View>
@@ -174,6 +210,13 @@ export default function EntryDetailScreen() {
             />
 
             <FooterButton
+              label={framingEditMode ? t.scan.editFramingDone : t.scan.editFraming}
+              variant="secondary"
+              onPress={() => setFramingEditMode((on) => !on)}
+              disabled={shareBusy || socialBusy || deleting}
+            />
+
+            <FooterButton
               label={t.common.share}
               onPress={handleShare}
               disabled={shareBusy || socialBusy || deleting}
@@ -187,6 +230,10 @@ export default function EntryDetailScreen() {
               disabled={shareBusy || socialBusy}
               loading={deleting}
             />
+
+            {framingEditMode ? (
+              <Text style={styles.framingHint}>{t.scan.framingHint}</Text>
+            ) : null}
           </ActionFooter>
         </>
       )}
@@ -241,6 +288,7 @@ const styles = StyleSheet.create({
     maxWidth: 340,
     alignSelf: 'center',
     aspectRatio: 5 / 7,
+    position: 'relative',
   },
   footerSheet: {
     borderTopWidth: 0,
@@ -262,6 +310,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  framingHint: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '500',
+    textAlign: 'center',
+    paddingHorizontal: 12,
+    lineHeight: 16,
   },
   pressed: {
     opacity: 0.88,

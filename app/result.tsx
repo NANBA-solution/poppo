@@ -85,6 +85,7 @@ export default function ResultScreen() {
   );
   const framingSaveTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const [framingGuideVisible, setFramingGuideVisible] = React.useState(false);
+  const [framingEditMode, setFramingEditMode] = React.useState(false);
   const [discarding, setDiscarding] = React.useState(false);
 
   const dismissFramingGuide = React.useCallback(() => {
@@ -113,6 +114,7 @@ export default function ResultScreen() {
       setNewQuestTitles([]);
       setImageFraming(DEFAULT_CARD_IMAGE_FRAMING);
       setFramingGuideVisible(false);
+      setFramingEditMode(false);
       return;
     }
 
@@ -150,7 +152,10 @@ export default function ResultScreen() {
           setNewQuestTitles(questTitles);
           setPhase('success');
           void shouldShowScanFramingGuide().then((show) => {
-            if (!cancelled && show) setFramingGuideVisible(true);
+            if (!cancelled && show) {
+              setFramingEditMode(true);
+              setFramingGuideVisible(true);
+            }
           });
           void hapticSuccess();
           if (newQuestIds.length > 0) {
@@ -293,9 +298,10 @@ export default function ResultScreen() {
                   flavorIndex={savedFlavorIndex}
                   entryId={savedEntryId ?? undefined}
                   imageFraming={imageFraming}
-                  framingEditable
+                  framingEditable={framingEditMode}
                   onImageFramingChange={handleImageFramingChange}
                   size="share"
+                  isActive={!framingEditMode}
                 />
                 {framingGuideVisible ? (
                   <ScanFramingGuide onDismiss={dismissFramingGuide} />
@@ -361,6 +367,18 @@ export default function ResultScreen() {
               loading={shareBusy}
             />
 
+            <FooterButton
+              label={framingEditMode ? t.scan.editFramingDone : t.scan.editFraming}
+              variant="secondary"
+              onPress={() => {
+                if (framingEditMode && framingGuideVisible) {
+                  dismissFramingGuide();
+                }
+                setFramingEditMode((on) => !on);
+              }}
+              disabled={discarding || shareBusy}
+            />
+
             <View style={styles.footerRow}>
               {savedEntryId ? (
                 <FooterButton
@@ -390,7 +408,9 @@ export default function ResultScreen() {
               />
             ) : null}
 
-            <Text style={styles.framingHint}>{t.scan.framingHint}</Text>
+            {framingEditMode ? (
+              <Text style={styles.framingHint}>{t.scan.framingHint}</Text>
+            ) : null}
           </>
         ) : null}
         {phase === 'error' ? (
