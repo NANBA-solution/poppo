@@ -6,11 +6,10 @@ final class CardNode: SCNNode {
   let rarity: CardRarity
 
   private let cardPlane: SCNNode
+  private let backPlateNode: SCNNode
   private let edgeNode: SCNNode
-  private let glowNode: SCNNode?
   private let shadowNode: SCNNode
   private var holoMaterial: SCNMaterial?
-  private var pulseActionKey = "legendaryPulse"
   private let compactRender: Bool
 
   var basePosition = SCNVector3Zero
@@ -51,65 +50,53 @@ final class CardNode: SCNNode {
       width: CGFloat(CardDimensions.planeWidth),
       height: CGFloat(CardDimensions.planeHeight)
     )
-    plane.cornerRadius = CardDimensions.cornerRadius / CardDimensions.height * CGFloat(CardDimensions.planeHeight)
+    let planeCorner =
+      CardDimensions.cornerRadius / CardDimensions.height * CGFloat(CardDimensions.planeHeight)
+    plane.cornerRadius = planeCorner
+
+    let theme = CardFaceTheme.theme(for: face)
+    let frameLabel = face.rarityLabel.uppercased()
+    let premiumFrame = frameLabel == "SR" || frameLabel == "UR" || frameLabel == "SECRET" || frameLabel == "R"
+
+    let borderScale: Float = frameLabel == "N"
+      ? 1.0 + Float(CardDimensions.whiteBorder / CardDimensions.width)
+      : 1.018
 
     cardPlane = SCNNode(geometry: plane)
 
-    let borderScale: Float = 1.0 + Float(CardDimensions.whiteBorder / CardDimensions.width)
+    let backPlate = SCNPlane(
+      width: CGFloat(CardDimensions.planeWidth) * 1.018,
+      height: CGFloat(CardDimensions.planeHeight) * 1.018
+    )
+    backPlate.cornerRadius = planeCorner + 0.006
+    backPlateNode = SCNNode(geometry: backPlate)
+    let backMat = SCNMaterial()
+    backMat.diffuse.contents = theme.frameBottom
+    backMat.lightingModel = .constant
+    backMat.isDoubleSided = false
+    backPlate.materials = [backMat]
+    backPlateNode.position = SCNVector3(0, 0, -0.003)
+
     let edgePlane = SCNPlane(
       width: CGFloat(CardDimensions.planeWidth) * CGFloat(borderScale),
       height: CGFloat(CardDimensions.planeHeight) * CGFloat(borderScale)
     )
-    edgePlane.cornerRadius = plane.cornerRadius + 0.02
+    edgePlane.cornerRadius = planeCorner + 0.012
     edgeNode = SCNNode(geometry: edgePlane)
     let edgeMaterial = SCNMaterial()
-    edgeMaterial.diffuse.contents = CardFaceTheme.theme(for: face).bezel
-    edgeMaterial.emission.contents = CardFaceTheme.theme(for: face).glow
-    edgeMaterial.emission.intensity = face.rarity == .common ? 0 : (face.rarity == .rare ? 0.18 : 0.32)
+    if premiumFrame {
+      edgeMaterial.diffuse.contents = theme.frameBottom
+      edgeMaterial.emission.contents = UIColor.clear
+      edgeMaterial.emission.intensity = 0
+    } else {
+      edgeMaterial.diffuse.contents = theme.bezel
+      edgeMaterial.emission.contents = theme.glow
+      edgeMaterial.emission.intensity = face.rarity == .common ? 0 : (face.rarity == .rare ? 0.18 : 0.32)
+    }
     edgeMaterial.lightingModel = .constant
     edgeMaterial.isDoubleSided = false
     edgePlane.materials = [edgeMaterial]
-    edgeNode.position = SCNVector3(0, 0, -0.004)
-
-    if rarity == .legendary {
-      let glowPlane = SCNPlane(
-        width: CGFloat(CardDimensions.planeWidth) * 1.14,
-        height: CGFloat(CardDimensions.planeHeight) * 1.14
-      )
-      glowPlane.cornerRadius = plane.cornerRadius + 0.06
-      glowNode = SCNNode(geometry: glowPlane)
-      let glowMat = SCNMaterial()
-      let glowColor = CardFaceTheme.theme(for: face).glow
-      glowMat.diffuse.contents = glowColor.withAlphaComponent(0.42)
-      glowMat.emission.contents = glowColor
-      glowMat.emission.intensity = CGFloat(rarity.glowEmissive + 0.15)
-      glowMat.lightingModel = .constant
-      glowMat.transparency = 0.48
-      glowMat.isDoubleSided = true
-      glowMat.writesToDepthBuffer = false
-      glowPlane.materials = [glowMat]
-      glowNode?.position = SCNVector3(0, 0, -0.01)
-    } else if rarity == .rare {
-      let glowPlane = SCNPlane(
-        width: CGFloat(CardDimensions.planeWidth) * 1.08,
-        height: CGFloat(CardDimensions.planeHeight) * 1.08
-      )
-      glowPlane.cornerRadius = plane.cornerRadius + 0.04
-      glowNode = SCNNode(geometry: glowPlane)
-      let glowMat = SCNMaterial()
-      let glowColor = CardFaceTheme.theme(for: face).glow
-      glowMat.diffuse.contents = glowColor.withAlphaComponent(0.28)
-      glowMat.emission.contents = glowColor
-      glowMat.emission.intensity = CGFloat(rarity.glowEmissive)
-      glowMat.lightingModel = .constant
-      glowMat.transparency = 0.58
-      glowMat.isDoubleSided = true
-      glowMat.writesToDepthBuffer = false
-      glowPlane.materials = [glowMat]
-      glowNode?.position = SCNVector3(0, 0, -0.008)
-    } else {
-      glowNode = nil
-    }
+    edgeNode.position = SCNVector3(0, 0, -0.001)
 
     let shadowPlane = SCNPlane(width: 2.1, height: 0.35)
     shadowNode = SCNNode(geometry: shadowPlane)
@@ -126,9 +113,7 @@ final class CardNode: SCNNode {
 
     name = "card-\(index)"
     addChildNode(shadowNode)
-    if let glowNode {
-      addChildNode(glowNode)
-    }
+    addChildNode(backPlateNode)
     addChildNode(edgeNode)
     addChildNode(cardPlane)
 
@@ -140,9 +125,6 @@ final class CardNode: SCNNode {
 
     applyMaterial(face: face)
     applyRaritySettings(face: face)
-    if !compactRender {
-      startGlowPulseIfNeeded()
-    }
   }
 
   @available(*, unavailable)
@@ -153,8 +135,22 @@ final class CardNode: SCNNode {
   func setFace(_ face: CardFaceData) {
     applyMaterial(face: face)
     applyRaritySettings(face: face)
+    let theme = CardFaceTheme.theme(for: face)
+    let frameLabel = face.rarityLabel.uppercased()
+    let premiumFrame = frameLabel == "SR" || frameLabel == "UR" || frameLabel == "SECRET" || frameLabel == "R"
     if let edgeMaterial = edgeNode.geometry?.materials.first {
-      edgeMaterial.diffuse.contents = CardFaceTheme.theme(for: face).bezel
+      if premiumFrame {
+        edgeMaterial.diffuse.contents = theme.frameBottom
+        edgeMaterial.emission.contents = UIColor.clear
+        edgeMaterial.emission.intensity = 0
+      } else {
+        edgeMaterial.diffuse.contents = theme.bezel
+        edgeMaterial.emission.contents = theme.glow
+        edgeMaterial.emission.intensity = face.rarity == .common ? 0 : (face.rarity == .rare ? 0.18 : 0.32)
+      }
+    }
+    if let backMaterial = backPlateNode.geometry?.materials.first {
+      backMaterial.diffuse.contents = theme.frameBottom
     }
   }
 
@@ -250,6 +246,8 @@ final class CardNode: SCNNode {
     material.shininess = 0.9
     material.lightingModel = .phong
     material.isDoubleSided = false
+    material.transparency = 1
+    material.transparencyMode = .default
 
     if let device = MTLCreateSystemDefaultDevice(),
        let library = try? device.makeDefaultLibrary(bundle: Bundle(for: CardNode.self)) {
@@ -281,16 +279,6 @@ final class CardNode: SCNNode {
     uniforms.fresnelPower = rarity.fresnelPower
     uniforms.shininess = 0.9
     uniforms.cornerRadius = Float(CardDimensions.cornerRadius / CardDimensions.height)
-  }
-
-  private func startGlowPulseIfNeeded() {
-    guard let glowNode else { return }
-    let peak: CGFloat = rarity == .legendary ? 0.95 : 0.72
-    let floor: CGFloat = rarity == .legendary ? 0.42 : 0.28
-    let up = SCNAction.fadeOpacity(to: peak, duration: rarity == .legendary ? 0.95 : 1.2)
-    let down = SCNAction.fadeOpacity(to: floor, duration: rarity == .legendary ? 0.95 : 1.2)
-    let pulse = SCNAction.repeatForever(SCNAction.sequence([up, down]))
-    glowNode.runAction(pulse, forKey: pulseActionKey)
   }
 }
 

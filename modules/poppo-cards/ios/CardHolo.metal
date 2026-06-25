@@ -146,9 +146,14 @@ fragment float4 cardHoloFragment(
 
   float4 baseSample = diffuseTexture.sample(texSampler, in.texCoord);
   float lum = dot(baseSample.rgb, float3(0.299, 0.587, 0.114));
+  float edgeDist = min(
+    min(in.texCoord.x, 1.0 - in.texCoord.x),
+    min(in.texCoord.y, 1.0 - in.texCoord.y)
+  );
+  float frameBand = smoothstep(0.05, 0.024, edgeDist);
   float textGuard = smoothstep(0.08, 0.38, lum);
   float foilBoost = smoothstep(0.32, 0.92, lum);
-  float holoMask = max(textGuard * 0.75, foilBoost);
+  float holoMask = max(max(textGuard * 0.75, foilBoost), frameBand * 0.92);
   float3 baseColor = mix(uniforms.baseTint * 0.16, baseSample.rgb, 0.97);
 
   float3 N = normalize(in.worldNormal);
@@ -207,5 +212,7 @@ fragment float4 cardHoloFragment(
   lit += float3(1.0) * phong * (0.22 + uniforms.holoIntensity * 0.18);
   lit += float3(1.0) * pow(spec, 3.0) * 0.35 * holoMask;
 
-  return float4(lit, baseSample.a * mask);
+  float3 finalColor = mix(lit, baseSample.rgb, frameBand * 0.72);
+  float alpha = max(baseSample.a, frameBand * 0.98) * mask;
+  return float4(finalColor, alpha);
 }

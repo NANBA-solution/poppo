@@ -77,7 +77,13 @@ struct CardHoloUniforms {
 enum CardDimensions {
   static let width: CGFloat = 200
   static let height: CGFloat = 280
-  static let cornerRadius: CGFloat = 16
+  /// カード外枠の角丸（1120px テクスチャ基準）
+  static let outerCornerRadiusFull: CGFloat = 44
+  static let textureHeight: CGFloat = 1120
+  /// 3D プレーン用（テクスチャと同じ比率）
+  static var cornerRadius: CGFloat {
+    outerCornerRadiusFull * height / textureHeight
+  }
   static let whiteBorder: CGFloat = 2.5
 
   static let planeWidth: Float = 2.0
@@ -177,8 +183,8 @@ struct CardFaceTheme {
         paperBottom: UIColor(red: 0.9, green: 0.84, blue: 0.98, alpha: 1),
         textBoxTop: UIColor(red: 0.98, green: 0.95, blue: 1.0, alpha: 1),
         textBoxBottom: UIColor(red: 0.92, green: 0.86, blue: 0.99, alpha: 1),
-        bezel: UIColor(red: 0.7, green: 0.55, blue: 0.95, alpha: 1),
-        glow: UIColor(red: 0.62, green: 0.42, blue: 0.95, alpha: 1),
+        bezel: UIColor(red: 0.42, green: 0.3, blue: 0.62, alpha: 1),
+        glow: UIColor(red: 0.55, green: 0.38, blue: 0.88, alpha: 1),
         accent: UIColor(red: 0.45, green: 0.28, blue: 0.72, alpha: 1),
         ink: readableInk,
         muted: readableMuted,
@@ -196,8 +202,8 @@ struct CardFaceTheme {
         paperBottom: UIColor(red: 0.96, green: 0.88, blue: 0.66, alpha: 1),
         textBoxTop: UIColor(red: 1.0, green: 0.98, blue: 0.9, alpha: 1),
         textBoxBottom: UIColor(red: 0.96, green: 0.9, blue: 0.72, alpha: 1),
-        bezel: UIColor(red: 0.9, green: 0.72, blue: 0.18, alpha: 1),
-        glow: UIColor(red: 0.95, green: 0.76, blue: 0.18, alpha: 1),
+        bezel: UIColor(red: 0.48, green: 0.36, blue: 0.08, alpha: 1),
+        glow: UIColor(red: 0.92, green: 0.72, blue: 0.14, alpha: 1),
         accent: UIColor(red: 0.54, green: 0.41, blue: 0.03, alpha: 1),
         ink: readableInk,
         muted: readableMuted,
@@ -250,8 +256,15 @@ struct CardFaceTheme {
 enum CardFaceRenderer {
   private static let fullSize = CGSize(width: 800, height: 1120)
   private static let compactSize = CGSize(width: 400, height: 560)
-  private static let corner: CGFloat = 32
+  private static let corner = CardDimensions.outerCornerRadiusFull
+  private static let frameWidth: CGFloat = 28
+  private static let innerSealOverlap: CGFloat = 2
   private static let cache = NSCache<NSString, UIImage>()
+
+  /// 同心円の角丸（外枠 R から inset 分だけ内側の R を求める）
+  private static func concentricRadius(outer: CGFloat, inset: CGFloat) -> CGFloat {
+    max(0, outer - inset)
+  }
 
   static func render(_ data: CardFaceData, compact: Bool = false) -> UIImage {
     let key = cacheKey(for: data, compact: compact)
@@ -270,7 +283,7 @@ enum CardFaceRenderer {
       return cg.width ^ cg.height ^ cg.bitsPerPixel
     }()
     let raw =
-      "\(compact)|\(photoKey)|\(data.serial)|\(data.name)|\(data.rarityLabel)|\(data.imageScale)|\(data.imageOffsetX)|\(data.imageOffsetY)"
+      "v6|\(compact)|\(photoKey)|\(data.serial)|\(data.name)|\(data.rarityLabel)|\(data.imageScale)|\(data.imageOffsetX)|\(data.imageOffsetY)"
     return raw as NSString
   }
 
@@ -278,18 +291,33 @@ enum CardFaceRenderer {
     let theme = CardFaceTheme.theme(for: data)
     let scale = size.width / fullSize.width
     let cornerRadius = corner * scale
-    let renderer = UIGraphicsImageRenderer(size: size)
+    let format = UIGraphicsImageRendererFormat()
+    format.opaque = true
+    format.scale = 1
+    let renderer = UIGraphicsImageRenderer(size: size, format: format)
     return renderer.image { ctx in
       let bounds = CGRect(origin: .zero, size: size)
+      theme.frameBottom.setFill()
+      ctx.fill(bounds)
+
       let path = UIBezierPath(roundedRect: bounds, cornerRadius: cornerRadius)
       path.addClip()
 
-      drawFrame(in: bounds, data: data, theme: theme, context: ctx.cgContext)
-      let inset = 28 * scale
-      let inner = bounds.insetBy(dx: inset, dy: inset)
-      drawInnerFace(data: data, in: inner, theme: theme, context: ctx.cgContext)
+      drawFrame(in: bounds, data: data, theme: theme, scale: scale, context: ctx.cgContext)
+      let inset = frameWidth * scale
+      let overlap = innerSealOverlap * scale
+      let inner = bounds.insetBy(dx: inset - overlap, dy: inset - overlap)
+      drawInnerFace(
+        data: data,
+        in: inner,
+        theme: theme,
+        context: ctx.cgContext
+      )
     }
   }
+
+  /// fullSize 時の内側フレーム幅（`drawInnerFace` の基準座標系）
+  private static let referenceInnerWidth = fullSize.width - frameWidth * 2 + innerSealOverlap * 2
 
   // legacy entry point kept for callers using default size
   private static var size: CGSize { fullSize }
@@ -298,46 +326,278 @@ enum CardFaceRenderer {
     in rect: CGRect,
     data: CardFaceData,
     theme: CardFaceTheme,
+    scale: CGFloat,
     context: CGContext
   ) {
-    let colors = [theme.frameTop.cgColor, theme.frameBottom.cgColor] as CFArray
-    let space = CGColorSpaceCreateDeviceRGB()
-    if let gradient = CGGradient(colorsSpace: space, colors: colors, locations: [0, 1]) {
-      context.drawLinearGradient(
-        gradient,
-        start: CGPoint(x: rect.minX, y: rect.minY),
-        end: CGPoint(x: rect.maxX, y: rect.maxY),
-        options: []
-      )
+    let frameInset = frameWidth * scale
+    let outerRadius = corner * scale
+    let innerRect = rect.insetBy(dx: frameInset, dy: frameInset)
+    let innerRadius = concentricRadius(outer: outerRadius, inset: frameInset)
+    let label = data.rarityLabel.uppercased()
+
+    if label == "N" {
+      drawFrameRing(
+        outer: rect,
+        inner: innerRect,
+        outerRadius: outerRadius,
+        innerRadius: innerRadius,
+        context: context
+      ) { ctx in
+        let space = CGColorSpaceCreateDeviceRGB()
+        let colors = [theme.frameTop.cgColor, theme.frameBottom.cgColor] as CFArray
+        if let gradient = CGGradient(colorsSpace: space, colors: colors, locations: [0, 1]) {
+          ctx.drawLinearGradient(
+            gradient,
+            start: CGPoint(x: rect.minX, y: rect.minY),
+            end: CGPoint(x: rect.maxX, y: rect.maxY),
+            options: []
+          )
+        }
+      }
+      return
     }
 
-    guard data.rarityLabel.uppercased() != "N" else { return }
+    drawMetallicFrameRing(
+      outer: rect,
+      inner: innerRect,
+      outerRadius: outerRadius,
+      innerRadius: innerRadius,
+      label: label,
+      theme: theme,
+      scale: scale,
+      context: context
+    )
+  }
+
+  private static func drawFrameRing(
+    outer: CGRect,
+    inner: CGRect,
+    outerRadius: CGFloat,
+    innerRadius: CGFloat,
+    context: CGContext,
+    draw: (CGContext) -> Void
+  ) {
+    context.saveGState()
+    let ring = UIBezierPath(roundedRect: outer, cornerRadius: outerRadius)
+    ring.append(UIBezierPath(roundedRect: inner, cornerRadius: innerRadius))
+    ring.usesEvenOddFillRule = true
+    ring.addClip()
+    draw(context)
+    context.restoreGState()
+  }
+
+  private static func drawMetallicFrameRing(
+    outer: CGRect,
+    inner: CGRect,
+    outerRadius: CGFloat,
+    innerRadius: CGFloat,
+    label: String,
+    theme: CardFaceTheme,
+    scale: CGFloat,
+    context: CGContext
+  ) {
+    let space = CGColorSpaceCreateDeviceRGB()
+    let stops = metallicStops(for: label, theme: theme)
+
+    drawFrameRing(
+      outer: outer,
+      inner: inner,
+      outerRadius: outerRadius,
+      innerRadius: innerRadius,
+      context: context
+    ) { ctx in
+      let baseColors = stops.colors.map(\.cgColor) as CFArray
+      let baseLocations = stops.locations.map { CGFloat($0) }
+      if let base = CGGradient(
+        colorsSpace: space,
+        colors: baseColors,
+        locations: baseLocations
+      ) {
+        ctx.drawLinearGradient(
+          base,
+          start: CGPoint(x: outer.minX, y: outer.minY),
+          end: CGPoint(x: outer.maxX, y: outer.maxY),
+          options: []
+        )
+      }
+
+      if let cross = CGGradient(
+        colorsSpace: space,
+        colors: [
+          UIColor.white.withAlphaComponent(0.42).cgColor,
+          theme.frameTop.withAlphaComponent(0.08).cgColor,
+          UIColor.black.withAlphaComponent(0.22).cgColor,
+        ] as CFArray,
+        locations: [0, 0.55, 1]
+      ) {
+        ctx.drawLinearGradient(
+          cross,
+          start: CGPoint(x: outer.minX, y: outer.minY),
+          end: CGPoint(x: outer.maxX, y: outer.maxY),
+          options: []
+        )
+      }
+
+      if label == "UR",
+         let iridescent = CGGradient(
+           colorsSpace: space,
+           colors: [
+             UIColor(red: 0.45, green: 0.25, blue: 0.82, alpha: 0.0).cgColor,
+             UIColor(red: 0.62, green: 0.42, blue: 0.95, alpha: 0.55).cgColor,
+             UIColor(red: 0.42, green: 0.72, blue: 0.95, alpha: 0.45).cgColor,
+             UIColor(red: 0.82, green: 0.48, blue: 0.92, alpha: 0.0).cgColor,
+           ] as CFArray,
+           locations: [0, 0.35, 0.68, 1]
+         ) {
+        ctx.drawLinearGradient(
+          iridescent,
+          start: CGPoint(x: outer.maxX, y: outer.minY),
+          end: CGPoint(x: outer.minX, y: outer.maxY),
+          options: []
+        )
+      }
+
+      if label == "SR",
+         let goldSheen = CGGradient(
+           colorsSpace: space,
+           colors: [
+             UIColor(red: 1.0, green: 0.95, blue: 0.55, alpha: 0.0).cgColor,
+             UIColor(red: 1.0, green: 0.88, blue: 0.35, alpha: 0.62).cgColor,
+             UIColor(red: 1.0, green: 0.98, blue: 0.78, alpha: 0.35).cgColor,
+             UIColor(red: 0.85, green: 0.62, blue: 0.12, alpha: 0.0).cgColor,
+           ] as CFArray,
+           locations: [0, 0.38, 0.58, 1]
+         ) {
+        ctx.drawLinearGradient(
+          goldSheen,
+          start: CGPoint(x: outer.minX + outer.width * 0.1, y: outer.minY),
+          end: CGPoint(x: outer.maxX, y: outer.maxY * 0.65),
+          options: []
+        )
+      }
+
+      if label == "R",
+         let silverSheen = CGGradient(
+           colorsSpace: space,
+           colors: [
+             UIColor(red: 0.82, green: 0.88, blue: 0.96, alpha: 0.0).cgColor,
+             UIColor(red: 0.72, green: 0.8, blue: 0.92, alpha: 0.58).cgColor,
+             UIColor(red: 0.92, green: 0.95, blue: 1.0, alpha: 0.42).cgColor,
+             UIColor(red: 0.48, green: 0.58, blue: 0.72, alpha: 0.0).cgColor,
+           ] as CFArray,
+           locations: [0, 0.34, 0.6, 1]
+         ) {
+        ctx.drawLinearGradient(
+          silverSheen,
+          start: CGPoint(x: outer.minX, y: outer.minY),
+          end: CGPoint(x: outer.maxX, y: outer.maxY),
+          options: []
+        )
+      }
+
+      drawLameFlakes(in: outer, label: label, context: ctx)
+
+      if let specular = CGGradient(
+        colorsSpace: space,
+        colors: [
+          UIColor.white.withAlphaComponent(0.72).cgColor,
+          UIColor.white.withAlphaComponent(0.18).cgColor,
+          UIColor.clear.cgColor,
+        ] as CFArray,
+        locations: [0, 0.22, 1]
+      ) {
+        let specRect = CGRect(
+          x: outer.minX,
+          y: outer.minY,
+          width: outer.width * 0.55,
+          height: outer.height * 0.42
+        )
+        ctx.saveGState()
+        ctx.clip(to: specRect)
+        ctx.drawLinearGradient(
+          specular,
+          start: CGPoint(x: specRect.minX, y: specRect.minY),
+          end: CGPoint(x: specRect.maxX, y: specRect.maxY),
+          options: []
+        )
+        ctx.restoreGState()
+      }
+    }
 
     context.saveGState()
-    let foilPath = UIBezierPath(roundedRect: rect.insetBy(dx: 2, dy: 2), cornerRadius: corner - 2)
-    foilPath.addClip()
+    let outerEdge = UIBezierPath(roundedRect: outer.insetBy(dx: 0.5 * scale, dy: 0.5 * scale), cornerRadius: outerRadius)
+    theme.frameBottom.withAlphaComponent(0.65).setStroke()
+    outerEdge.lineWidth = max(1, 1.4 * scale)
+    outerEdge.stroke()
 
-    let highlight = CGGradient(
-      colorsSpace: space,
-      colors: [
-        UIColor.white.withAlphaComponent(0.55).cgColor,
-        UIColor.clear.cgColor,
-        UIColor.white.withAlphaComponent(0.35).cgColor,
-        UIColor.clear.cgColor,
-      ] as CFArray,
-      locations: [0, 0.35, 0.62, 1]
-    )
-    if let highlight {
-      context.drawLinearGradient(
-        highlight,
-        start: CGPoint(x: rect.minX, y: rect.minY),
-        end: CGPoint(x: rect.maxX, y: rect.maxY),
-        options: []
+    let innerEdge = UIBezierPath(roundedRect: inner.insetBy(dx: 0.5 * scale, dy: 0.5 * scale), cornerRadius: innerRadius)
+    UIColor.white.withAlphaComponent(0.38).setStroke()
+    innerEdge.lineWidth = max(1.0, 1.2 * scale)
+    innerEdge.stroke()
+    context.restoreGState()
+  }
+
+  private static func metallicStops(
+    for label: String,
+    theme: CardFaceTheme
+  ) -> (colors: [UIColor], locations: [CGFloat]) {
+    switch label {
+    case "SR":
+      return (
+        [
+          UIColor(red: 0.24, green: 0.17, blue: 0.04, alpha: 1),
+          UIColor(red: 0.48, green: 0.34, blue: 0.06, alpha: 1),
+          UIColor(red: 0.78, green: 0.56, blue: 0.1, alpha: 1),
+          UIColor(red: 1.0, green: 0.86, blue: 0.28, alpha: 1),
+          UIColor(red: 1.0, green: 0.96, blue: 0.68, alpha: 1),
+          UIColor(red: 0.82, green: 0.6, blue: 0.14, alpha: 1),
+          UIColor(red: 0.34, green: 0.24, blue: 0.05, alpha: 1),
+        ],
+        [0, 0.12, 0.28, 0.46, 0.58, 0.8, 1]
+      )
+    case "UR":
+      return (
+        [
+          UIColor(red: 0.1, green: 0.05, blue: 0.22, alpha: 1),
+          UIColor(red: 0.26, green: 0.12, blue: 0.44, alpha: 1),
+          UIColor(red: 0.48, green: 0.26, blue: 0.72, alpha: 1),
+          UIColor(red: 0.72, green: 0.5, blue: 0.94, alpha: 1),
+          UIColor(red: 0.86, green: 0.74, blue: 1.0, alpha: 1),
+          UIColor(red: 0.52, green: 0.32, blue: 0.78, alpha: 1),
+          UIColor(red: 0.14, green: 0.08, blue: 0.3, alpha: 1),
+        ],
+        [0, 0.14, 0.3, 0.48, 0.6, 0.82, 1]
+      )
+    case "R":
+      return (
+        [
+          UIColor(red: 0.16, green: 0.2, blue: 0.28, alpha: 1),
+          UIColor(red: 0.34, green: 0.42, blue: 0.54, alpha: 1),
+          UIColor(red: 0.58, green: 0.68, blue: 0.8, alpha: 1),
+          UIColor(red: 0.8, green: 0.87, blue: 0.95, alpha: 1),
+          UIColor(red: 0.92, green: 0.95, blue: 0.99, alpha: 1),
+          UIColor(red: 0.52, green: 0.62, blue: 0.76, alpha: 1),
+          UIColor(red: 0.2, green: 0.26, blue: 0.36, alpha: 1),
+        ],
+        [0, 0.14, 0.32, 0.5, 0.62, 0.82, 1]
+      )
+    case "SECRET":
+      return (
+        [
+          UIColor(red: 0.05, green: 0.05, blue: 0.05, alpha: 1),
+          UIColor(red: 0.18, green: 0.16, blue: 0.1, alpha: 1),
+          UIColor(red: 0.72, green: 0.58, blue: 0.16, alpha: 1),
+          UIColor(red: 0.36, green: 0.62, blue: 0.42, alpha: 1),
+          UIColor(red: 0.12, green: 0.11, blue: 0.08, alpha: 1),
+        ],
+        [0, 0.22, 0.48, 0.62, 1]
+      )
+    default:
+      return (
+        [theme.frameBottom, theme.frameTop, theme.frameBottom],
+        [0, 0.5, 1]
       )
     }
-
-    drawLameFlakes(in: rect, label: data.rarityLabel, context: context)
-    context.restoreGState()
   }
 
   private static func lameColor(for label: String, alpha: CGFloat) -> UIColor {
@@ -402,23 +662,103 @@ enum CardFaceRenderer {
     theme: CardFaceTheme,
     context: CGContext
   ) {
-    let bezel = rect.insetBy(dx: 8, dy: 8)
-    let bezelPath = UIBezierPath(roundedRect: bezel, cornerRadius: 20)
-    theme.bezel.setFill()
-    bezelPath.fill()
+    let layoutScale = rect.width / referenceInnerWidth
+    context.saveGState()
+    context.translateBy(x: rect.minX, y: rect.minY)
+    context.scaleBy(x: layoutScale, y: layoutScale)
+    let local = CGRect(x: 0, y: 0, width: referenceInnerWidth, height: rect.height / layoutScale)
+    let frameInnerR = concentricRadius(outer: corner, inset: frameWidth - innerSealOverlap)
+    drawInnerFaceContent(
+      data: data,
+      in: local,
+      theme: theme,
+      frameInnerRadius: frameInnerR,
+      context: context
+    )
+    context.restoreGState()
+  }
 
-    let face = bezel.insetBy(dx: 10, dy: 10)
-    let facePath = UIBezierPath(roundedRect: face, cornerRadius: 16)
+  private static func sealInnerCorners(
+    in rect: CGRect,
+    radius: CGFloat,
+    color: UIColor,
+    context: CGContext
+  ) {
+    context.saveGState()
+    UIBezierPath(roundedRect: rect, cornerRadius: radius).addClip()
+    color.setFill()
+    context.fill(rect)
+    context.restoreGState()
+  }
+
+  private static func drawInnerFaceContent(
+    data: CardFaceData,
+    in rect: CGRect,
+    theme: CardFaceTheme,
+    frameInnerRadius: CGFloat,
+    context: CGContext
+  ) {
+    let label = data.rarityLabel.uppercased()
+    let isPremium = label == "SR" || label == "UR" || label == "SECRET" || label == "R"
+
+    sealInnerCorners(in: rect, radius: frameInnerRadius, color: theme.frameBottom, context: context)
+    let contentSealInset: CGFloat = 1.5
+    let contentSeal = rect.insetBy(dx: contentSealInset, dy: contentSealInset)
+    let contentSealR = concentricRadius(outer: frameInnerRadius, inset: contentSealInset)
+    sealInnerCorners(in: contentSeal, radius: contentSealR, color: theme.paperBottom, context: context)
+
+    let face: CGRect
+    if isPremium {
+      let matInset: CGFloat = 3
+      let mat = rect.insetBy(dx: matInset, dy: matInset)
+      let matR = concentricRadius(outer: frameInnerRadius, inset: matInset)
+      fillVerticalGradient(
+        in: mat,
+        top: theme.paperTop,
+        bottom: theme.paperBottom,
+        cornerRadius: matR
+      )
+
+      let lipInset: CGFloat = 2.5
+      let lipR = concentricRadius(outer: frameInnerRadius, inset: lipInset)
+      let lipPath = UIBezierPath(roundedRect: rect.insetBy(dx: lipInset, dy: lipInset), cornerRadius: lipR)
+      theme.frameBottom.withAlphaComponent(0.45).setStroke()
+      lipPath.lineWidth = 1.4
+      lipPath.stroke()
+      UIColor.white.withAlphaComponent(0.22).setStroke()
+      let innerLipInset: CGFloat = 4
+      let innerLipR = concentricRadius(outer: frameInnerRadius, inset: innerLipInset)
+      let innerLip = UIBezierPath(
+        roundedRect: rect.insetBy(dx: innerLipInset, dy: innerLipInset),
+        cornerRadius: innerLipR
+      )
+      innerLip.lineWidth = 0.9
+      innerLip.stroke()
+
+      let faceInset: CGFloat = 8
+      face = rect.insetBy(dx: faceInset, dy: faceInset)
+    } else {
+      let bezelInset: CGFloat = 8
+      let bezel = rect.insetBy(dx: bezelInset, dy: bezelInset)
+      let bezelR = concentricRadius(outer: frameInnerRadius, inset: bezelInset)
+      let bezelPath = UIBezierPath(roundedRect: bezel, cornerRadius: bezelR)
+      theme.bezel.setFill()
+      bezelPath.fill()
+      face = bezel.insetBy(dx: 10, dy: 10)
+    }
+
+    let faceInsetFromInner = isPremium ? 8.0 : 18.0
+    let faceR = concentricRadius(outer: frameInnerRadius, inset: faceInsetFromInner)
     fillVerticalGradient(
       in: face,
       top: theme.paperTop,
       bottom: theme.paperBottom,
-      cornerRadius: 16
+      cornerRadius: max(0, faceR)
     )
 
-    if data.rarityLabel.uppercased() != "N" {
+    if label != "N" {
       context.saveGState()
-      UIBezierPath(roundedRect: face, cornerRadius: 16).addClip()
+      UIBezierPath(roundedRect: face, cornerRadius: max(0, faceR)).addClip()
       drawLameFlakes(in: face, label: data.rarityLabel, context: context)
       context.restoreGState()
     }
@@ -636,6 +976,9 @@ enum CardFaceRenderer {
     boxPath.lineWidth = 2
     boxPath.stroke()
 
+    let brandReserve: CGFloat = data.showBrand ? 30 : 8
+    let bottomLimit = rect.maxY - brandReserve
+
     var y = rect.minY + 14
     let left = rect.minX + 14
     let width = rect.width - 28
@@ -650,7 +993,7 @@ enum CardFaceRenderer {
       theme: theme
     ) + 4
 
-    if data.showMoveDesc, !data.moveDescription.isEmpty {
+    if data.showMoveDesc, !data.moveDescription.isEmpty, y < bottomLimit - 20 {
       y = drawMoveTrait(
         label: data.moveTraitLabel,
         trait: data.moveDescription,
@@ -661,7 +1004,7 @@ enum CardFaceRenderer {
       ) + 6
     }
 
-    if data.showMove2, !data.move2Name.isEmpty {
+    if data.showMove2, !data.move2Name.isEmpty, y < bottomLimit - 18 {
       y = drawAttackRow(
         name: data.move2Name,
         damage: data.move2Damage,
@@ -674,7 +1017,8 @@ enum CardFaceRenderer {
 
       if data.showMove2Desc,
          !data.move2Description.isEmpty,
-         data.move2Description != data.moveDescription {
+         data.move2Description != data.moveDescription,
+         y < bottomLimit - 20 {
         y = drawMoveTrait(
           label: data.moveTraitLabel,
           trait: data.move2Description,
@@ -686,20 +1030,22 @@ enum CardFaceRenderer {
       }
     }
 
-    let lineRect = CGRect(x: left, y: y, width: width, height: 2)
-    theme.accentSoft.setFill()
-    UIRectFill(lineRect)
-    y += 10
+    if y < bottomLimit - 24 {
+      let lineRect = CGRect(x: left, y: y, width: width, height: 2)
+      theme.accentSoft.setFill()
+      UIRectFill(lineRect)
+      y += 10
 
-    let flavorRect = CGRect(x: left, y: y, width: width, height: rect.maxY - y - 34)
-    drawText(
-      data.flavor,
-      in: flavorRect,
-      font: .italicSystemFont(ofSize: 16),
-      color: theme.muted,
-      align: .left,
-      lineBreak: .byWordWrapping
-    )
+      let flavorRect = CGRect(x: left, y: y, width: width, height: max(12, bottomLimit - y))
+      drawText(
+        data.flavor,
+        in: flavorRect,
+        font: .italicSystemFont(ofSize: 16),
+        color: theme.muted,
+        align: .left,
+        lineBreak: .byWordWrapping
+      )
+    }
 
     if data.showBrand {
       let brandY = rect.maxY - 28
@@ -733,9 +1079,18 @@ enum CardFaceRenderer {
     width: CGFloat,
     theme: CardFaceTheme
   ) -> CGFloat {
-    let rowH: CGFloat = 38
-    let labelRect = CGRect(x: left, y: y, width: 52, height: rowH)
-    let traitRect = CGRect(x: left + 52, y: y, width: width - 52, height: rowH)
+    let labelW: CGFloat = 52
+    let font = UIFont.italicSystemFont(ofSize: 15)
+    let traitWidth = width - labelW
+    let traitHeight = measuredTextHeight(
+      trait,
+      width: traitWidth,
+      font: font,
+      maxLines: 2
+    )
+    let rowH = max(22, traitHeight + 4)
+    let labelRect = CGRect(x: left, y: y, width: labelW, height: rowH)
+    let traitRect = CGRect(x: left + labelW, y: y, width: traitWidth, height: rowH)
     drawText(
       label,
       in: labelRect,
@@ -746,12 +1101,35 @@ enum CardFaceRenderer {
     drawText(
       trait,
       in: traitRect,
-      font: .italicSystemFont(ofSize: 15),
+      font: font,
       color: theme.muted,
       align: .left,
-      lineBreak: .byTruncatingTail
+      lineBreak: .byWordWrapping
     )
     return y + rowH
+  }
+
+  private static func measuredTextHeight(
+    _ text: String,
+    width: CGFloat,
+    font: UIFont,
+    maxLines: Int
+  ) -> CGFloat {
+    guard !text.isEmpty, width > 0 else { return 0 }
+    let paragraph = NSMutableParagraphStyle()
+    paragraph.lineBreakMode = .byWordWrapping
+    let attrs: [NSAttributedString.Key: Any] = [
+      .font: font,
+      .paragraphStyle: paragraph,
+    ]
+    let maxH = font.lineHeight * CGFloat(max(1, maxLines)) + 2
+    let bounds = (text as NSString).boundingRect(
+      with: CGSize(width: width, height: maxH),
+      options: [.usesLineFragmentOrigin, .usesFontLeading],
+      attributes: attrs,
+      context: nil
+    )
+    return ceil(bounds.height)
   }
 
   private static func drawAttackRow(

@@ -3,8 +3,8 @@
 | 項目 | 内容 |
 |------|------|
 | 製品名 | ぽっぽ（POPPO） |
-| バージョン | 1.0.1 |
-| 最終更新 | 2026-06-22 |
+| バージョン | 1.0.2 |
+| 最終更新 | 2026-06-25 |
 | プラットフォーム | iOS / Android（Expo dev client 前提） |
 | ドキュメント種別 | 現行実装に基づく PRD |
 
@@ -153,17 +153,19 @@
 | COL-03 | エントリは新しい順で先頭追加 |
 | COL-04 | 削除時はストレージ上の画像ファイルも削除 |
 | COL-05 | 全削除（設定から）でコレクション + 画像を一括削除 |
+| COL-06 | `imageUri` は AsyncStorage に **`poppo-scans/{id}.jpg` の相対パス**で保存。読み込み時に `documentDirectory` から解決（再ビルド後もパスが壊れない）。旧絶対パスは起動時に自動マイグレーション |
 
 **データモデル `PigeonEntry`**
 
 ```typescript
 {
   id: string;          // タイムスタンプ + ランダム
-  imageUri: string;    // アプリ内永続パス
+  imageUri: string;    // 実行時は絶対パス。永続化は poppo-scans/{id}.jpg（相対）
   breed: string;       // 常に「未判定」（スキーマ互換のため残存）
   scannedAt: string;   // ISO 8601
   rarity?: CardRarity;     // N | R | SR | UR | SECRET（保存時確定）
   flavorIndex?: number;    // t.card.flavors[rarity] のインデックス
+  imageFraming?: { scale: number; offsetX: number; offsetY: number }; // カード写真窓の拡大・位置（scale 1 = contain）
 }
 ```
 
@@ -171,10 +173,9 @@
 
 | 項目 | 内容 |
 |------|------|
-| 抽選 | 新規保存時 `rollRarityForNewScan`（ランダム + 条件床 + 天井） |
-| 確率（床適用前） | SECRET 1% / UR 3% / SR 9% / R 22% / N 65% |
-| 条件床 | 初回 UR、マイルストーン番号 SR+、深夜 R+、0時 SR+、金曜13日 SR+、うるう日 UR+、4:44・3:33 SECRET 等 |
-| 天井 | 前回 SR 以上から 25 枚で SR 保証 |
+| 抽選 | 新規保存時 `rollRarityForNewScan`（**ほぼ純粋ランダム** + イースターエッグ床のみ） |
+| 確率 | SECRET 0.03% / UR 0.12% / SR 0.35% / R 2.5% / N 約 97% |
+| 条件床（イースターエッグのみ） | うるう日 2/29→SR 以上、4:44・3:33→SECRET 以上。それ以外の時間帯・マイルストーン・天井保証は廃止 |
 | 旧データ | `ensureEntryRarity` で `entryId` シードにより遡及付与 |
 | わざ | `cardMoveGenerator` で鳩関連技名・説明をシード固定生成 |
 
@@ -193,6 +194,7 @@
 | RES-04 | 非ハト時は専用タイトル・本文でエラー表示 |
 | RES-05 | シェア: `react-native-view-shot` で `PigeonCard` を JPG キャプチャ |
 | RES-06 | SNS ボタン: Instagram ストーリー / X（キャプションはクリップボードコピー併用） |
+| RES-07 | 保存前にカード写真窓をピンチ・ドラッグで調整可能（`imageFraming` をエントリに保存） |
 
 ### 4.5 プロフィール（`/profile`）
 
@@ -210,8 +212,9 @@
 | 要件 ID | 説明 |
 |---------|------|
 | DEX-01 | 称号 + 進捗 `{current}/{goal} 羽スキャン（{percent}%）` + SR 以上枚数 |
-| DEX-02 | 2 列グリッドの `PigeonCard` 一覧（写真・番号・レア・わざ・フレーバー） |
+| DEX-02 | 2 列グリッドの `PigeonCard`（`grid`）一覧。わざ名・ダメージ・フレーバー 1 行（わざ説明は非表示） |
 | DEX-03 | タップで `/entry/[id]` |
+| DEX-04 | iOS グリッドは `quality=compact` の**静止 3D**（`isActive=false`）。コレクション読み込みはメモリキャッシュ利用 |
 
 **進捗計算（`getDexCompletion`）**
 
@@ -240,6 +243,8 @@
 | CRD-06 | **iOS + `PoppoCards` 同梱時**: `PoppoHoloCardView` で 3D ホロ表示に差し替え |
 | CRD-07 | **Android / ネイティブ未同梱時**: React Native の `PigeonCard` を表示（フォールバック） |
 | CRD-08 | 3D 表示でも RN と同じコンテンツ（名前・わざ・フレーバー等）をネイティブへ props 渡し |
+| CRD-09 | 写真窓は **contain** 基準（`scale` 1 = 全体表示）。結果画面でピンチ・ドラッグ調整可（`imageFraming` 永続化） |
+| CRD-10 | `grid` はコンパクト描画向けにテキスト省略（わざ説明オフ・フレーバー 1 行） |
 
 **3D ホロカード（`modules/poppo-cards`、iOS のみ）**
 
@@ -248,11 +253,13 @@
 | HOL-01 | SceneKit `SCNPlane` + Metal シェーダー（`CardHolo.metal`）で回折・フレネル・GGX 風ホロ |
 | HOL-02 | `CoreMotion` で端末傾きに応じたカードチルト・色相シフト |
 | HOL-03 | タップでリフト、ドラッグで回転、離すとスプリング復帰 |
-| HOL-04 | カード面テクスチャは `CardFaceRenderer` が UIKit で描画（写真・レア・わざ・フレーバー込み） |
-| HOL-05 | レアリティマッピング: N→`common` / R→`rare` / SR・UR・SECRET→`legendary`（`toHoloCardRarity`） |
-| HOL-06 | レア別ホロ強度・ティント・フレネル・UR/SECRET 用グロー |
+| HOL-04 | カード面テクスチャは `CardFaceRenderer` が UIKit で描画（写真・レア・わざ・フレーバー込み）。**不透明キャンバス**・外枠角丸 **44px**（1120px 高さ基準） |
+| HOL-05 | レアリティマッピング: N→`common` / R→`rare` / SR・UR・SECRET→`legendary`（`toHoloCardRarity`）。**ラベル（R/SR/UR）で枠色・金属グラデーションを個別制御** |
+| HOL-06 | R 以上は **メタリック外枠リング**（多段グラデーション・ラメ・ベベル）。半透明グローハローは廃止。角の隙間は同心円角丸 + 内側シール + 3D 裏板で解消 |
 | HOL-07 | 親 View の bounds いっぱいに SCNView を表示（固定 200×280 は廃止） |
-| HOL-08 | 画像 URI は `file://`・絶対パス・HTTP(S) に対応（`CardImageLoader`） |
+| HOL-08 | 画像 URI は `file://`・絶対パス・**`poppo-scans/` 相対パス**・HTTP(S) に対応（`CardImageLoader`） |
+| HOL-09 | Metal シェーダーは枠縁バンドの色・不透明度を保持（ホロで枠が透けない） |
+| HOL-10 | グリッド（`compact`）は静止描画・低解像度テクスチャ。詳細/結果は `full` + モーション有効 |
 
 ### 4.8 クエスト（`/quests`）
 
@@ -521,5 +528,6 @@
 
 | 日付 | 版 | 内容 |
 |------|-----|------|
+| 2026-06-25 | 1.0.2 | スキャン画像の相対パス永続化・レア抽選の純粋ランダム化・コレクション静止3D・カード外枠（メタリック/角丸/透け防止）・写真 contain 調整を追記 |
 | 2026-06-22 | 1.0.1 | 3D ホロカード（`poppo-cards`）・`PigeonCard` iOS 差し替え・トレカ UI 詳細を追記 |
 | 2026-06-06 | 1.0 | 現行実装（ローカル専用・スキャン中心）に基づき初版作成 |

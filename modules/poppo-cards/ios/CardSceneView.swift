@@ -420,6 +420,13 @@ enum CardImageLoader {
     append(uri)
     append(uri.replacingOccurrences(of: "file://", with: ""))
 
+    if uri.hasPrefix("poppo-scans/") || (!uri.contains("://") && !uri.hasPrefix("/")) {
+      if let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+        let relative = uri.hasPrefix("poppo-scans/") ? uri : "poppo-scans/\(uri)"
+        append(docs.appendingPathComponent(relative).path)
+      }
+    }
+
     if let url = URL(string: uri), url.isFileURL {
       append(url.path)
     } else if uri.hasPrefix("/") {
